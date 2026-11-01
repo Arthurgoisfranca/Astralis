@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { MODULES, Home, Lobby } from "./AppShell.jsx";
+import { sha256Hex } from "./SharedTools.jsx";
 import { Agenda, CommunityLibrary, Diary, GMDocuments, GMShield, Handouts, Lore, Maps, Music, NPCs, PDFWorkshop, Sessions, SystemGuide, Characters, Workbench } from "./CampaignModules.jsx";
 
 const ROOM_LIST = "mesa-dados:rooms";
@@ -95,20 +96,58 @@ export default function App() {
   }
   function send(type, payload) {
     const connection = socketRef.current;
-    if (!connection?.connected) { setNotice("Reconectando à sala. Tente novamente em instantes."); return; }
-    connection.emit("room:action", { type, payload }, result => { if (!result?.ok) setNotice(result?.error || "Não foi possível salvar."); });
+    if (!connection?.connected) {
+      const result = { ok: false, error: "Reconectando à sala. Tente novamente em instantes." };
+      setNotice(result.error);
+      return Promise.resolve(result);
+    }
+    return new Promise(resolve => connection.emit("room:action", { type, payload }, result => {
+      if (!result?.ok) setNotice(result?.error || "Não foi possível salvar.");
+      resolve(result || { ok: false, error: "Não foi possível confirmar o salvamento." });
+    }));
   }
   async function uploadFile(file, options = {}) {
     if (!activeRoom || !identity) throw new Error("Entre na sala antes de enviar arquivos.");
-    const query = new URLSearchParams({ scope: options.scope || "public", kind: options.kind || "file" });
-    const response = await fetch(API_BASE + "/api/rooms/" + encodeURIComponent(activeRoom.id) + "/uploads?" + query, {
-      method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "x-room-token": identity.token, "x-file-name": encodeURIComponent(file.name) }, body: file
-    });
+    if (file.size > 150 * 1024 * 1024) throw new Error("O arquivo deve ter até 150 MiB.");
+    const uploadSpec = { fileName: file.name, mime: file.type || "application/octet-stream", size: file.size, lastModified: file.lastModified, scope: options.scope || "public", kind: options.kind || "file" };
+    const endpoint = "/api/rooms/" + encodeURIComponent(activeRoom.id) + "/uploads/start";
+    let uploadStart = await api(endpoint, { method: "POST", headers: { "x-room-token": identity.token }, body: JSON.stringify(uploadSpec) });
+    const chunkSize = uploadStart.chunkSize || 5 * 1024 * 1024, totalChunks = uploadStart.chunkCount || Math.ceil(file.size / chunkSize);
+    for (let index = 0; index < (uploadStart.nextIndex || 0); index += 1) {
+      const previousChunk = file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize));
+      if (await sha256Hex(previousChunk) !== uploadStart.receivedChunks?.[index]?.sha256) {
+        uploadStart = await api(endpoint, { method: "POST", headers: { "x-room-token": identity.token }, body: JSON.stringify({ ...uploadSpec, restart: true }) });
+        break;
+      }
+    }
+    const uploadUrl = "/api/rooms/" + encodeURIComponent(activeRoom.id) + "/uploads/" + encodeURIComponent(uploadStart.uploadId);
+    for (let index = uploadStart.nextIndex || 0; index < totalChunks; index += 1) {
+      const chunk = file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize)), hash = await sha256Hex(chunk);
+      let response, saved;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        response = undefined;
+        try {
+          response = await fetch(API_BASE + uploadUrl + "/chunks/" + index, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "x-room-token": identity.token, "x-chunk-sha256": hash }, body: chunk });
+          saved = await response.json().catch(() => ({}));
+          if (response.ok) break;
+          if (response.status < 500 && response.status !== 429) throw new Error(saved.error || "Não foi possível enviar o bloco.");
+        } catch (error) {
+          if (response && response.status < 500 && response.status !== 429) throw error;
+          if (attempt === 2) throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+      }
+      if (!response?.ok) throw new Error(saved?.error || "Falha ao enviar o bloco " + (index + 1) + ".");
+      const percent = Math.round(((index + 1) / totalChunks) * 100);
+      setNotice("Enviando " + file.name + " · " + percent + "%"); options.onProgress?.(percent);
+    }
+    setNotice("Finalizando envio e salvando no armazenamento…");
+    const response = await fetch(API_BASE + uploadUrl + "/complete", { method: "POST", headers: { "Content-Type": "application/json", "x-room-token": identity.token }, body: "{}" });
     const saved = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(saved.error || "Não foi possível enviar o arquivo.");
+    if (!response.ok) throw new Error(saved.error || "Não foi possível finalizar o arquivo.");
+    options.onProgress?.(100); setNotice("Upload concluído: " + file.name);
     return { ...saved, url: saved.url && saved.url.startsWith("/") ? API_BASE + saved.url : saved.url };
-  }
-  async function getSignedUrl(file) {
+  }  async function getSignedUrl(file) {
     if (!activeRoom || !identity) throw new Error("Entre na sala para abrir o arquivo.");
     const result = await api("/api/rooms/" + encodeURIComponent(activeRoom.id) + "/files/signed-url", {
       method: "POST", headers: { "x-room-token": identity.token }, body: JSON.stringify({ bucket: file.bucket, path: file.path })

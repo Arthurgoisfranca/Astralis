@@ -29,6 +29,10 @@ O servidor Node entrega o front-end compilado e também atende a API e as conex�
 ├── package.json
 ├── package-lock.json
 ├── server.js
+├── server/
+│   └── repositories/
+│       ├── roomRepository.js
+│       └── communityLibraryRepository.js
 ├── vite.config.js
 ├── render.yaml
 ├── scripts/
@@ -41,64 +45,18 @@ O servidor Node entrega o front-end compilado e também atende a API e as conex�
 │   ├── CampaignModules.jsx
 │   ├── SharedTools.jsx
 │   ├── RpgSystems.js
+│   ├── domain/
+│   │   ├── characterSheets.ts
+│   │   └── sheetCalculations.ts
 │   └── astralisTheme.css
 └── supabase/
     └── migrations/
-        └── 20261031_init.sql
+        ├── 20261031_init.sql
+        └── 20261101_v12_realtime_storage_security.sql
 ```
-
-## Executar localmente
-
-Requer Node.js 22 ou superior.
-
-```bash
-npm ci
-npm run dev
-```
-
-Abra o endereço `Local` mostrado pelo Vite, normalmente `http://localhost:5173/`. O servidor da API usa a porta 3001. Mantenha uma única execução de `npm run dev` por vez; se uma porta estiver ocupada, encerre a execução anterior antes de iniciar outra.
-
-Sem credenciais Supabase, o servidor cria o banco local em `data/mesa.sqlite`. A pasta `data/` não deve ser usada como armazenamento persistente em hospedagens efêmeras.
-
-## Configurar Supabase
-
-1. Crie um projeto Supabase.
-2. No SQL Editor, execute `supabase/migrations/20261031_init.sql`. A migração cria as tabelas e os buckets usados pelo app.
-3. Crie um arquivo `.env` na raiz do projeto com as credenciais do projeto:
-
-   ```env
-   SUPABASE_URL=https://SEU_PROJECT_REF.supabase.co
-   SUPABASE_SECRET_KEY=sb_secret_sua_chave
-   ```
-
-4. Reinicie `npm run dev`. A API usa Supabase quando `SUPABASE_URL` e `SUPABASE_SECRET_KEY` estão preenchidos.
-
-A chave secreta é usada somente pelo servidor. Não a coloque em variáveis `VITE_*` nem a envie ao navegador. Os nomes padrão dos buckets são `mesa-assets`, `mesa-private` e `mesa-community`; podem ser substituídos pelas variáveis `SUPABASE_PUBLIC_BUCKET`, `SUPABASE_PRIVATE_BUCKET` e `SUPABASE_COMMUNITY_BUCKET`.
-
-### Migrar dados locais existentes
-
-Se já houver campanhas no SQLite, configure o Supabase e execute a migração uma vez:
-
-```bash
-npm run migrate:cloud
-```
-
-O comando copia campanhas, arquivos locais e itens da biblioteca para o Supabase; os dados locais são mantidos como cópia. Faça backup da pasta `data/` antes da migração.
-
-## Build e produção
-
-```bash
-npm run build
-npm start
-```
-
-Configure `SUPABASE_URL` e `SUPABASE_SECRET_KEY` no ambiente do serviço. O servidor escuta a porta fornecida pela hospedagem por meio de `PORT`. O arquivo `render.yaml` contém a configuração de serviço para Render.
-
-Para hospedar o front-end separado, defina `VITE_API_URL` e `VITE_SOCKET_URL` com a URL pública do serviço Node e configure `CORS_ORIGIN` no servidor com a origem do front-end. O backend usa Socket.IO e precisa de uma hospedagem que aceite conexões WebSocket persistentes.
-
 ## Sistemas suportados
 
-Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masquerade 5E / 6E, Daggerheart, Assimilação RPG e Sacramento.
+Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masquerade 5E / 6E, Daggerheart, Triangle Agency, Sacramento e Assimilação RPG.
 
 ## Segurança e dados
 
@@ -106,3 +64,18 @@ Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masqu
 - Convites dão acesso à sala conforme a função de Mestre ou Jogador.
 - A edição de entradas do diário respeita autoria e visibilidade.
 - O OCR de fichas escaneadas é uma sugestão; confira os valores reconhecidos antes de salvar.
+## Versão 1.2
+
+- Modelos TypeScript discriminados por sistema e cálculos adaptativos de modificadores de D&D, dificuldades de Call of Cthulhu, limiares de Daggerheart e dados de Fome de Vampire.
+- Uploads de até 150 MiB enviados em blocos sequenciais de 5 MiB, com SHA-256 por bloco, tentativas automáticas e retomada após reinício quando `DATA_DIR` estiver em volume persistente.
+- Redimensionamento de imagens para até 2048 px, convertidas para WebP com qualidade 85% antes do envio.
+- O player de música permanece montado ao trocar de módulo. A consulta do sistema confirma o salvamento antes de mostrar o estado concluído.
+- Repositórios isolam a persistência de salas e da biblioteca. Mudanças em `rooms` no PostgreSQL são retransmitidas aos participantes conectados por Socket.IO.
+
+### Atualizar o Supabase
+
+Depois de executar `supabase/migrations/20261031_init.sql`, aplique `supabase/migrations/20261101_v12_realtime_storage_security.sql` no SQL Editor. A migração habilita a publicação da tabela `rooms` e ajusta os buckets para 150 MiB. Ela mantém as consultas diretas de `anon` e `authenticated` bloqueadas; a API Express valida os tokens de convite e acessa o Supabase com a chave secreta no servidor.
+
+Este projeto ainda não usa Supabase Auth. Por isso, as políticas não usam `auth.uid()`; a identidade é o token de sala validado pelo backend, que também aplica as permissões do Mestre, do autor do diário e das anotações privadas. Não exponha `SUPABASE_SECRET_KEY` ao navegador.
+
+Os blocos temporários e o manifesto do envio ficam em `data/upload-chunks/`, com validade de seis horas. O servidor verifica os hashes ao iniciar e retoma as partes ainda pendentes. Em ambiente local, reserve espaço em disco suficiente para o arquivo; no Supabase, aumente também o limite global de uploads do projeto para pelo menos 150 MiB. Em produção, monte um volume persistente em `DATA_DIR` para preservar os blocos temporários durante reinícios. O navegador envia blocos de 5 MiB ao Astralis; para arquivos acima de 6 MiB, o backend encaminha os dados ao Supabase pelo protocolo TUS em blocos de 6 MiB.

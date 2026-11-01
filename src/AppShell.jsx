@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { readImage } from "./SharedTools.jsx";
+import { readImage, resizeImage } from "./SharedTools.jsx";
 import { SYSTEMS } from "./RpgSystems.js";
 
 export const MODULES = [
@@ -19,20 +19,11 @@ function CampaignForm({ onCreate, busy }) {
   const update = key => event => setForm(old => ({ ...old, [key]: event.target.value }));
   async function pickImage(file) {
     if (!file) return;
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { alert("Use uma imagem PNG, JPG ou WebP."); return; }
-    if (file.size > 8 * 1024 * 1024) { alert("A imagem deve ter até 8 MB."); return; }
     try {
-      const source = await readImage(file), img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, 1400 / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        setForm(old => ({ ...old, illustration: canvas.toDataURL("image/webp", .8) }));
-      };
-      img.onerror = () => alert("Não foi possível abrir essa imagem.");
-      img.src = source;
-    } catch (error) { alert(error.message); }
+      const prepared = await resizeImage(file, 2048);
+      const illustration = await readImage(prepared);
+      setForm(old => ({ ...old, illustration }));
+    } catch (error) { alert(error.message || "Não foi possível preparar a imagem."); }
   }
   return <form onSubmit={event => { event.preventDefault(); onCreate(form); }} className="stack-form">
     <label>Nome da campanha<input required maxLength="100" value={form.title} onChange={update("title")} placeholder="[D&D 5e] Mesa para iniciantes"/></label>
@@ -54,7 +45,7 @@ function CampaignForm({ onCreate, busy }) {
       <label className="full-field">Breve resumo<textarea value={form.summary} onChange={update("summary")} placeholder="Premissa e ponto de partida da campanha."/></label>
       <label className="full-field">Observações<textarea value={form.observations} onChange={update("observations")} placeholder="Informações adicionais para o grupo."/></label>
       <div className="illustration-field full-field">
-        <span>Imagem ilustrativa <small>PNG, JPG ou WebP · até 8 MB</small></span>
+        <span>Imagem ilustrativa <small>PNG, JPG ou WebP · até 30 MB</small></span>
         <label className={"drop-image " + (dragging ? "dragging" : "")} onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); pickImage(event.dataTransfer.files[0]); }}>
           {form.illustration ? <img src={form.illustration} alt="Prévia da campanha"/> : <span>Arraste uma imagem aqui ou <b>escolha um arquivo</b></span>}
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => pickImage(event.target.files[0])}/>

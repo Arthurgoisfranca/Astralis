@@ -1,12 +1,13 @@
 {
   "name": "astralis",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Gestão de campanhas e lobby de RPG em tempo real",
   "scripts": {
     "dev": "concurrently -k \"node scripts/startDevServer.js\" \"vite --host 0.0.0.0\"",
     "start": "node server.js",
     "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "migrate:cloud": "node --env-file=.env scripts/migrateSupabaseData.js"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
     "concurrently": "^9.2.1",
+    "typescript": "^7.0.2",
     "vite": "^7.1.7"
   }
 }

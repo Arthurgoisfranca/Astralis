@@ -5,6 +5,9 @@ import { ImageDrop, Modal, TokenMaker, makeId, readImage, resizeImage } from "./
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { SYSTEMS, systemProfile } from "./RpgSystems.js";
+import { buildCharacterSheet } from "./domain/characterSheets.ts";
+import { callOfCthulhuThresholds, daggerheartDamage, dndAbilityModifiers, isWithinDamageThresholds, vampireDicePool } from "./domain/sheetCalculations.ts";
+
 let pdfToolsPromise; async function loadPdfTools() { if (!pdfToolsPromise) pdfToolsPromise = Promise.all([import("pdf-lib"), import("pdfjs-dist")]).then(([pdfLib, pdfjsLib]) => { pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl; return { PDFDocument: pdfLib.PDFDocument, pdfjsLib }; }); return pdfToolsPromise; }
 
 function ModuleHeader({ eyebrow, title, description, action }) {
@@ -78,10 +81,17 @@ export function Workbench({ room, presence = [], isGM, onOpen }) {
   </div>;
 }
 export function SystemGuide({ value, isGM, send }) {
-  const [text, setText] = useState(value || "");
-  useEffect(() => setText(value || ""), [value]);
+  const [text, setText] = useState(value || ""), [saving, setSaving] = useState(false), [saved, setSaved] = useState(false);
+  useEffect(() => { setText(value || ""); setSaved(false); }, [value]);
+  async function save() {
+    setSaving(true); setSaved(false);
+    try {
+      const result = await send("system:update", { value: text });
+      if (result?.ok) setSaved(true);
+    } finally { setSaving(false); }
+  }
   return <div className="view-stack"><ModuleHeader eyebrow="REGRAS DA CAMPANHA" title="Consulta do sistema" description="Regras da mesa, referências rápidas e combinações do grupo."/>
-    <section className="surface writing-surface">{isGM ? <><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Anote regras da casa, referências úteis e acordos do grupo."/><button className="button primary" onClick={() => send("system:update", { value: text })}>Salvar consulta</button></> : <div className="lore-read">{value || "O Mestre ainda não adicionou referências do sistema."}</div>}</section></div>;
+    <section className="surface writing-surface">{isGM ? <><textarea value={text} onChange={event => { setText(event.target.value); setSaved(false); }} placeholder="Anote regras da casa, referências úteis e acordos do grupo."/><div className="save-row"><button className="button primary" disabled={saving} onClick={save}>{saving ? "Salvando…" : "Salvar consulta"}</button>{saved && <span className="muted-copy" role="status">Salvo na sala</span>}</div></> : <div className="lore-read">{value || "O Mestre ainda não adicionou referências do sistema."}</div>}</section></div>;
 }
 export function Lore({ value, isGM, send }) {
   const [text, setText] = useState(value || "");
@@ -260,7 +270,7 @@ export function Diary({ value, journal = [], isGM, identity, send }) {
   return <div className="view-stack"><ModuleHeader eyebrow="REGISTROS" title="Diário de bordo" description="Entradas públicas para a mesa e notas privadas entre cada jogador e o Mestre."/>
     {isGM && <section className="surface writing-surface"><div className="section-eyebrow">CADERNO DO MESTRE</div><textarea value={shared} onChange={event => setShared(event.target.value)} placeholder="Resumo geral da campanha visível para o grupo."/><button className="button secondary" onClick={() => send("notes:save", { shared, private: privateText })}>Salvar caderno</button></section>}
     <form className="surface journal-form" onSubmit={saveEntry}><div className="section-eyebrow">{entry.id ? "EDITAR ENTRADA" : "NOVA ENTRADA"}</div><input required maxLength="120" placeholder="Título" value={entry.title} onChange={event => setEntry(old => ({ ...old, title: event.target.value }))}/><textarea required value={entry.body} onChange={event => setEntry(old => ({ ...old, body: event.target.value }))} placeholder="Anote uma pista, acontecimento ou lembrança da sessão."/><div className="journal-controls"><label>Visibilidade<select value={entry.visibility} onChange={event => setEntry(old => ({ ...old, visibility: event.target.value }))}><option value="public">Público para a mesa</option><option value="private">Privado para mim e o Mestre</option></select></label><button className="button secondary">{entry.id ? "Salvar edição" : "Publicar no diário"}</button>{entry.id && <button type="button" className="button quiet" onClick={() => setEntry(empty)}>Cancelar</button>}</div></form>
-    <div className="journal-list">{journal.map(item => <article className="surface journal-entry" key={item.id}><header><div><div className="section-eyebrow">{item.authorName} · {item.visibility === "private" ? "PRIVADO" : "PÚBLICO"}</div><h2>{item.title}</h2></div><time>{new Date(item.updatedAt).toLocaleDateString("pt-BR")}</time></header><p>{item.body}</p>{(isGM || item.authorId === identity.userId) && <div className="card-actions"><button className="text-action" onClick={() => setEntry({ id: item.id, title: item.title, body: item.body, visibility: item.visibility })}>Editar</button><button className="text-action danger" onClick={() => send("journal:delete", { id: item.id })}>Excluir</button></div>}</article>)}</div>
+    <div className="journal-list">{journal.map(item => <article className="surface journal-entry" key={item.id}><header><div><div className="section-eyebrow">{item.authorName} · {(item.is_private ?? (item.visibility === "private")) ? "PRIVADO" : "PÚBLICO"}</div><h2>{item.title}</h2></div><time>{new Date(item.updatedAt).toLocaleDateString("pt-BR")}</time></header><p>{item.body}</p>{(isGM || item.authorId === identity.userId) && <div className="card-actions"><button className="text-action" onClick={() => setEntry({ id: item.id, title: item.title, body: item.body, visibility: item.visibility })}>Editar</button><button className="text-action danger" onClick={() => send("journal:delete", { id: item.id })}>Excluir</button></div>}</article>)}</div>
     {!journal.length && <Empty>O diário ainda não tem entradas.</Empty>}
     <div className="diary-private-grid">{!isGM && <section className="surface writing-surface"><div className="section-eyebrow">NOTAS PRIVADAS</div><textarea value={privateText} onChange={event => setPrivateText(event.target.value)} placeholder="Lembretes visíveis apenas para você e o Mestre."/><button className="button quiet" onClick={() => send("notes:save", { private: privateText })}>Salvar notas privadas</button></section>}
       {!isGM && <section className="surface writing-surface"><div className="section-eyebrow">CADERNO DO MESTRE</div><div className="lore-read">{value.shared || "O Mestre ainda não adicionou um resumo."}</div></section>}</div>
@@ -286,14 +296,20 @@ export function Characters({ room, identity, system, isGM, send, upload }) {
       return <article className="surface character-card" key={player.id}>{player.character?.token && <img className="character-token" src={player.character.token} alt={"Token de " + player.character.name}/>}<div className="character-body"><div className="section-eyebrow">{player.name}</div><h2>{player.character?.name || "Ficha não criada"}</h2><p>{player.character ? [player.character.classLevel, ...primary, player.character.hp ? "PV " + player.character.hp : "", player.character.ac ? "CA " + player.character.ac : ""].filter(Boolean).join(" · ") : "A ficha ainda está vazia."}</p><button className="button secondary" onClick={() => setEditing(player)}>{player.character ? "Editar ficha" : "Criar ficha"}</button></div></article>;
     })}</div>
     {!targets.length && <Empty>Entre na sala como jogador para criar sua ficha.</Empty>}
-    {editing && <CharacterEditor player={editing} profile={profile} upload={upload} onClose={() => setEditing(null)} onSave={character => { send("character:save", { ownerId: editing.id, character }); setEditing(null); }}/>}
+    {editing && <CharacterEditor player={editing} profile={profile} system={system} upload={upload} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/>}
   </div>;
 }
-function CharacterEditor({ player, profile, upload, onClose, onSave }) {
+function CharacterEditor({ player, profile, system, upload, onClose, onSave }) {
   const existing = player.character || {};
   const [form, setForm] = useState({ name: existing.name || "", classLevel: existing.classLevel || "", hp: existing.hp || "", mp: existing.mp || "", ac: existing.ac || "", stats: existing.stats || {}, attributes: existing.attributes || "", appearance: existing.appearance || "", inventory: existing.inventory || "", notes: existing.notes || "", token: existing.token || "", pdf: existing.pdf || null });
   const [tokenOpen, setTokenOpen] = useState(false), [saving, setSaving] = useState(false);
   const set = key => event => setForm(old => ({ ...old, [key]: event.target.value }));
+  const numericStat = key => Number(form.stats[key]) || 0;
+  const derived = system?.startsWith("D&D") ? dndAbilityModifiers({ strength: Number(form.stats.strength) || 10, dexterity: Number(form.stats.dexterity) || 10, constitution: Number(form.stats.constitution) || 10, intelligence: Number(form.stats.intelligence) || 10, wisdom: Number(form.stats.wisdom) || 10, charisma: Number(form.stats.charisma) || 10 }) : null;
+  const cocThresholds = system === "Call of Cthulhu" && /^\d+$/.test(form.stats.skills || "") ? callOfCthulhuThresholds(numericStat("skills")) : null;
+  const daggerThresholds = system === "Daggerheart" ? { minor: numericStat("minor"), major: numericStat("major"), severe: numericStat("severe") } : null;
+  const daggerResult = daggerThresholds && numericStat("damage") > 0 ? daggerheartDamage(numericStat("damage"), daggerThresholds) : null;
+  const vampirePool = system?.startsWith("Vampire") ? vampireDicePool(numericStat("pool"), numericStat("hunger")) : null;
   async function save(event) {
     event.preventDefault(); setSaving(true);
     try {
@@ -303,13 +319,14 @@ function CharacterEditor({ player, profile, upload, onClose, onSave }) {
         const uploaded = await upload(new File([blob], "token-" + makeId() + ".png", { type: blob.type || "image/png" }), { scope: "public", kind: "character" });
         next.token = uploaded.url;
       }
+      next.sheet = buildCharacterSheet(system, player.id, player.id, { name: form.name, classLevel: form.classLevel, portraitUrl: next.token || null, notes: form.notes, appearance: form.appearance, inventory: form.inventory, stats: form.stats });
       await onSave(next);
     } catch (error) { alert(error.message || "Não foi possível salvar a ficha."); }
     finally { setSaving(false); }
   }
   return <Modal title={"Ficha de " + player.name} onClose={onClose}><form className="character-form" onSubmit={save}>
     <label>Nome do personagem<input required value={form.name} onChange={set("name")}/></label><label>Classe / nível<input value={form.classLevel} onChange={set("classLevel")}/></label>
-    <div className="adaptive-stats">{profile.fields.map(([key, label]) => <label key={key}>{label}<input value={form.stats[key] || ""} onChange={event => setForm(old => ({ ...old, stats: { ...old.stats, [key]: event.target.value } }))}/></label>)}</div>
+    <div className="adaptive-stats">{profile.fields.map(([key, label]) => <label key={key}>{label}<input value={form.stats[key] || ""} onChange={event => setForm(old => ({ ...old, stats: { ...old.stats, [key]: event.target.value } }))}/></label>)}</div>{derived && <p className="sheet-derived">Modificadores: FOR {derived.strength >= 0 ? "+" : ""}{derived.strength} · DES {derived.dexterity >= 0 ? "+" : ""}{derived.dexterity} · CON {derived.constitution >= 0 ? "+" : ""}{derived.constitution} · INT {derived.intelligence >= 0 ? "+" : ""}{derived.intelligence} · SAB {derived.wisdom >= 0 ? "+" : ""}{derived.wisdom} · CAR {derived.charisma >= 0 ? "+" : ""}{derived.charisma}</p>}{cocThresholds && <p className="sheet-derived">Testes (%): regular {cocThresholds.regular} · difícil {cocThresholds.hard} · extremo {cocThresholds.extreme}</p>}{daggerThresholds && !isWithinDamageThresholds(daggerThresholds) && <p className="sheet-derived warning">Revise os limiares: menor ≤ maior ≤ severo.</p>}{daggerResult && <p className="sheet-derived">Dano informado: {daggerResult.severity}{daggerResult.overflow ? " · excede o limiar severo em " + daggerResult.overflow : ""}.</p>}{vampirePool && <p className="sheet-derived">Conjunto: {vampirePool.normalDice} dados normais + {vampirePool.hungerDice} de Fome.</p>}
     <label>Atributos<textarea value={form.attributes} onChange={set("attributes")} placeholder="Atributos, perícias e valores secundários"/></label><label>Aparência<textarea value={form.appearance} onChange={set("appearance")}/></label><label>Inventário<textarea value={form.inventory} onChange={set("inventory")}/></label><label>Notas<textarea value={form.notes} onChange={set("notes")}/></label>
     <div className="token-inline">{form.token && <img src={form.token} alt="Token do personagem"/>}<button type="button" className="button quiet" onClick={() => setTokenOpen(true)}>Criar ou trocar token</button>{form.pdf && <span className="muted-copy">PDF: {form.pdf.name}</span>}</div>
     <div className="modal-actions"><button type="button" className="button quiet" onClick={onClose}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar ficha"}</button></div>
@@ -344,7 +361,7 @@ export function GMDocuments({ items, upload, getSignedUrl, send }) {
   }
   async function open(item) { const url = await getSignedUrl(item); window.open(url, "_blank", "noopener,noreferrer"); }
   return <div className="view-stack"><ModuleHeader eyebrow="ARQUIVO PRIVADO · MESTRE" title="Documentos da campanha" description="Preparação, segredos, relatórios e diários do Mestre."/>
-    <form className="surface gm-doc-form" onSubmit={submit}><label>Título<input value={title} onChange={event => setTitle(event.target.value)} placeholder="Preparação da próxima sessão"/></label><label>Notas<textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Descrição curta para localizar o documento."/></label><label className="button quiet file-button">Anexar PDF ou DOCX<input type="file" accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={event => setFile(event.target.files[0] || null)}/></label><span className="muted-copy">{file?.name || "Até 25 MB"}</span><button className="button primary" disabled={busy}>{busy ? "Enviando…" : "Guardar em arquivo privado"}</button></form>
+    <form className="surface gm-doc-form" onSubmit={submit}><label>Título<input value={title} onChange={event => setTitle(event.target.value)} placeholder="Preparação da próxima sessão"/></label><label>Notas<textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Descrição curta para localizar o documento."/></label><label className="button quiet file-button">Anexar PDF ou DOCX<input type="file" accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={event => setFile(event.target.files[0] || null)}/></label><span className="muted-copy">{file?.name || "PDF ou DOCX · até 150 MiB"}</span><button className="button primary" disabled={busy}>{busy ? "Enviando…" : "Guardar em arquivo privado"}</button></form>
     <div className="document-list">{items.map(item => <article className="surface document-row" key={item.id}><div><b>{item.title}</b><small>{item.fileName} · {item.notes}</small></div><div className="card-actions"><button className="button quiet" onClick={() => open(item)}>Abrir</button><button className="text-action danger" onClick={() => send("gm-doc:delete", { id: item.id })}>Excluir</button></div></article>)}</div>
     {!items.length && <Empty>Nenhum documento privado adicionado.</Empty>}
   </div>;
@@ -372,7 +389,16 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
   const [fields, setFields] = useState([]), [values, setValues] = useState({}), [textContent, setTextContent] = useState("");
   const [suggestions, setSuggestions] = useState({}), [busy, setBusy] = useState(false), [progress, setProgress] = useState("");
   const profile = systemProfile(system);
-  const available = isGM ? items : items.filter(item => item.ownerId === identity.userId); function saveSuggestedStats(found, pdfMeta = active, targetId = ownerId) { if (!Object.keys(found).length) return; const player = room.players.find(item => item.id === targetId); if (!player) return; const character = { ...(player.character || {}), stats: { ...(player.character?.stats || {}), ...found } }; if (pdfMeta) character.pdf = { name: pdfMeta.fileName, bucket: pdfMeta.bucket, path: pdfMeta.path }; send("character:save", { ownerId: targetId, character }); }
+  const available = isGM ? items : items.filter(item => item.ownerId === identity.userId); async function saveSuggestedStats(found, pdfMeta = active, targetId = ownerId) {
+    if (!Object.keys(found).length) return;
+    const player = room.players.find(item => item.id === targetId);
+    if (!player) return;
+    const character = { ...(player.character || {}), stats: { ...(player.character?.stats || {}), ...found } };
+    character.sheet = buildCharacterSheet(system, targetId, targetId, { name: character.name || player.name, classLevel: character.classLevel || "", portraitUrl: character.token || null, notes: character.notes || "", appearance: character.appearance || "", inventory: character.inventory || "", stats: character.stats });
+    if (pdfMeta) character.pdf = { name: pdfMeta.fileName, bucket: pdfMeta.bucket, path: pdfMeta.path };
+    const result = await send("character:save", { ownerId: targetId, character });
+    if (!result?.ok) throw new Error(result?.error || "Não foi possível atualizar a ficha.");
+  }
   useEffect(() => () => { if (viewerUrl.startsWith("blob:")) URL.revokeObjectURL(viewerUrl); }, [viewerUrl]);
   async function parsePdf(file, meta = null) { const { PDFDocument, pdfjsLib } = await loadPdfTools();
     const bytes = await file.arrayBuffer(), document = await PDFDocument.load(bytes), form = document.getForm();
@@ -392,13 +418,13 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
       const key = profile.fields.find(([id, label]) => { const name = field.name.toLowerCase(); return name.includes(id.toLowerCase()) || name.includes(label.toLowerCase()); })?.[0];
       if (key && field.value) fromForms[key] = field.value;
     }
-    const parsed = { ...fromText, ...fromForms }; setSuggestions(parsed); saveSuggestedStats(parsed, meta || active, meta?.ownerId || ownerId);
+    const parsed = { ...fromText, ...fromForms }; setSuggestions(parsed); await saveSuggestedStats(parsed, meta || active, meta?.ownerId || ownerId);
     if (meta) setActive(meta);
     return bytes;
   }
   async function chooseFile(file) {
     if (!file || file.type !== "application/pdf") return alert("Escolha uma ficha em PDF.");
-    if (file.size > 25 * 1024 * 1024) return alert("O arquivo deve ter até 25 MB.");
+    if (file.size > 150 * 1024 * 1024) return alert("O arquivo deve ter até 150 MiB.");
     if (!ownerId && isGM) return alert("Adicione um jogador antes de enviar a ficha.");
     setBusy(true); setProgress("Lendo campos e texto do PDF…");
     try {
@@ -433,7 +459,7 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
         await page.render({ canvas, canvasContext: canvas.getContext("2d"), viewport }).promise;
         const result = await worker.recognize(canvas); text += result.data.text + "\n";
       }
-      setTextContent(text); const parsed = parseSuggestions(text, profile); setSuggestions(parsed); saveSuggestedStats(parsed);
+      setTextContent(text); const parsed = parseSuggestions(text, profile); setSuggestions(parsed); await saveSuggestedStats(parsed);
     } catch (error) { alert(error.message || "O OCR não conseguiu ler este PDF."); }
     finally { await worker?.terminate(); setBusy(false); setProgress(""); }
   }
@@ -451,7 +477,7 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
       const link = document.createElement("a"); link.href = url; link.download = (active?.fileName || "ficha").replace(/\.pdf$/i, "") + "-preenchida.pdf"; link.click(); URL.revokeObjectURL(url);
     } catch (error) { alert(error.message || "Não foi possível gerar o PDF preenchido."); }
   }
-  function applyToCharacter() { saveSuggestedStats(suggestions, active, ownerId); }
+  async function applyToCharacter() { try { await saveSuggestedStats(suggestions, active, ownerId); } catch (error) { alert(error.message || "Não foi possível aplicar os dados à ficha."); } }
   return <div className="view-stack"><ModuleHeader eyebrow="FICHAS E FORMULÁRIOS" title="PDF da ficha" description={system || "Selecione o sistema da campanha para sugerir os campos."}/>
     <section className="surface pdf-toolbar">{isGM && <label>Personagem<select value={ownerId} onChange={event => setOwnerId(event.target.value)}><option value="">Escolha o jogador</option>{room.players.map(player => <option value={player.id} key={player.id}>{player.name}</option>)}</select></label>}<label className="button quiet file-button">{busy ? "Processando…" : "Enviar PDF"}<input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={event => chooseFile(event.target.files[0])}/></label><span>{progress || "Campos AcroForm, texto e OCR"}</span></section>
     {!!available.length && <section className="surface saved-pdfs"><div className="section-eyebrow">FICHAS GUARDADAS</div>{available.map(item => <button key={item.id} className="recent-room" onClick={() => openSaved(item)}><span><b>{item.title}</b><small>{room.players.find(player => player.id === item.ownerId)?.name || "Minha ficha"}</small></span><i>Abrir PDF</i></button>)}</section>}
@@ -481,7 +507,7 @@ export function CommunityLibrary({ room, identity, items: initialItems = [], upl
   }
   const visible = items.filter(item => (item.title + " " + item.system + " " + item.fileName).toLowerCase().includes(search.toLowerCase()));
   return <div className="view-stack"><ModuleHeader eyebrow="BIBLIOTECA DA COMUNIDADE" title="PDFs de referência" description="Consulte e compartilhe materiais de sistemas durante a sessão."/>
-    <form className="surface library-form" onSubmit={submit}><label>Título<input value={title} onChange={event => setTitle(event.target.value)} placeholder="Livro ou referência"/></label><label>Sistema<select value={system} onChange={event => setSystem(event.target.value)}><option value="">Sistema geral</option>{SYSTEMS.map(value => <option key={value}>{value}</option>)}</select></label><label className="button quiet file-button">Escolher PDF<input type="file" accept="application/pdf,.pdf" onChange={event => setFile(event.target.files[0] || null)}/></label><span className="muted-copy">{file?.name || "Arquivos PDF até 25 MB"}</span><button className="button secondary" disabled={busy}>{busy ? "Enviando…" : "Publicar na biblioteca"}</button></form>
+    <form className="surface library-form" onSubmit={submit}><label>Título<input value={title} onChange={event => setTitle(event.target.value)} placeholder="Livro ou referência"/></label><label>Sistema<select value={system} onChange={event => setSystem(event.target.value)}><option value="">Sistema geral</option>{SYSTEMS.map(value => <option key={value}>{value}</option>)}</select></label><label className="button quiet file-button">Escolher PDF<input type="file" accept="application/pdf,.pdf" onChange={event => setFile(event.target.files[0] || null)}/></label><span className="muted-copy">{file?.name || "PDF · até 150 MiB"}</span><button className="button secondary" disabled={busy}>{busy ? "Enviando…" : "Publicar na biblioteca"}</button></form>
     <input className="library-search" aria-label="Buscar na biblioteca" placeholder="Buscar por título, sistema ou arquivo" value={search} onChange={event => setSearch(event.target.value)}/>
     <div className="document-list">{visible.map(item => <article className="surface document-row" key={item.id}><div><b>{item.title}</b><small>{item.system || "Geral"} · {item.uploader}</small></div><button className="button quiet" onClick={async () => { const base = (import.meta.env.VITE_API_URL || "").replace(/\/$/, ""), url = item.url?.startsWith("/") ? base + item.url : item.url; window.open(url, "_blank", "noopener,noreferrer"); }}>Abrir PDF</button></article>)}</div>
     {!visible.length && <Empty>A biblioteca ainda não tem arquivos.</Empty>}
