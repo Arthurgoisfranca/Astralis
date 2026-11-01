@@ -1,0 +1,152 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
+import { MODULES, Home, Lobby } from "./AppShell.jsx";
+import { Agenda, CommunityLibrary, Diary, GMDocuments, GMShield, Handouts, Lore, Maps, Music, NPCs, PDFWorkshop, Sessions, SystemGuide, Characters, Workbench } from "./CampaignModules.jsx";
+
+const ROOM_LIST = "mesa-dados:rooms";
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE || location.origin;
+const api = async (url, options = {}) => {
+  const response = await fetch(API_BASE + url, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || "Não foi possível concluir.");
+  return body;
+};
+function savedRooms() { try { return JSON.parse(sessionStorage.getItem(ROOM_LIST) || "[]"); } catch (_) { return []; } }
+function saveRoom(meta) {
+  const rooms = savedRooms().filter(item => item.id !== meta.id);
+  sessionStorage.setItem(ROOM_LIST, JSON.stringify([meta, ...rooms].slice(0, 12)));
+}
+function parseInvitation(input) {
+  try { const url = new URL(input); return { roomId: url.searchParams.get("room") || "", inviteToken: url.searchParams.get("invite") || "" }; } catch (_) {}
+  const match = String(input || "").match(/^([a-f0-9]+)(?:&invite=([a-f0-9]+))?$/i);
+  return match ? { roomId: match[1], inviteToken: match[2] || "" } : { roomId: "", inviteToken: "" };
+}
+function savedIdentity(id) { try { return JSON.parse(sessionStorage.getItem("mesa-dados:identity:" + id) || "null"); } catch (_) { return null; } }
+
+export default function App() {
+  const socketRef = useRef(null);
+  const [rooms, setRooms] = useState(savedRooms);
+  const [activeRoom, setActiveRoom] = useState(null);
+  const [identity, setIdentity] = useState(null);
+  const [roomState, setRoomState] = useState(null);
+  const [presence, setPresence] = useState([]);
+  const [tab, setTab] = useState("lobby");
+  const [connected, setConnected] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [inviteId, setInviteId] = useState(() => new URLSearchParams(location.search).has("invite") ? location.href : new URLSearchParams(location.search).get("room") || "");
+
+  const enter = useCallback((meta, creds) => {
+    socketRef.current?.disconnect();
+    const connection = io(SOCKET_URL, { path: "/socket.io", auth: { roomId: meta.id, token: creds.token }, transports: ["websocket", "polling"] });
+    socketRef.current = connection;
+    connection.on("connect", () => setConnected(true));
+    connection.on("disconnect", () => setConnected(false));
+    connection.on("connect_error", error => { setConnected(false); setNotice(error.message || "Falha ao conectar."); });
+    connection.on("room:state", value => { setRoomState(value); saveRoom({ ...meta, title: value.campaign.title, system: value.campaign.system, status: value.campaign.status || "notStarted" }); setRooms(savedRooms()); });
+    connection.on("presence", setPresence);
+    setActiveRoom(meta); setIdentity(creds); setRoomState(null); setTab("lobby");
+    history.replaceState({}, "", "?room=" + encodeURIComponent(meta.id));
+  }, []);
+
+  useEffect(() => {
+    const roomId = new URLSearchParams(location.search).get("room");
+    if (!roomId) return;
+    const creds = savedIdentity(roomId), meta = savedRooms().find(room => room.id === roomId);
+    if (creds && meta) enter(meta, creds);
+  }, [enter]);
+  useEffect(() => () => socketRef.current?.disconnect(), []);
+  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(""), 3500); return () => clearTimeout(timer); }, [notice]);
+
+  async function createRoom(form) {
+    setBusy(true);
+    try {
+      const result = await api("/api/rooms", { method: "POST", body: JSON.stringify(form) });
+      const creds = { roomId: result.room.id, token: result.token, role: "gm", userId: "gm", name: result.name };
+      const meta = { ...result.room, role: "gm", name: result.name };
+      sessionStorage.setItem("mesa-dados:identity:" + meta.id, JSON.stringify(creds));
+      saveRoom(meta); setRooms(savedRooms()); enter(meta, creds);
+    } catch (error) { setNotice(error.message); }
+    finally { setBusy(false); }
+  }
+  async function joinRoom(input, name) {
+    setBusy(true);
+    try {
+      const invitation = parseInvitation(input);
+      if (!invitation.roomId || !invitation.inviteToken) throw new Error("Cole o link completo enviado pelo Mestre.");
+      const result = await api("/api/rooms/" + encodeURIComponent(invitation.roomId) + "/join", { method: "POST", body: JSON.stringify({ name, inviteToken: invitation.inviteToken }) });
+      const creds = { roomId: result.room.id, token: result.token, role: "player", userId: result.userId, name: result.name };
+      const meta = { ...result.room, role: "player", name: result.name };
+      sessionStorage.setItem("mesa-dados:identity:" + meta.id, JSON.stringify(creds));
+      saveRoom(meta); setRooms(savedRooms()); enter(meta, creds);
+    } catch (error) { setNotice(error.message); }
+    finally { setBusy(false); }
+  }
+  function resume(meta) {
+    const creds = savedIdentity(meta.id);
+    if (creds) enter(meta, creds);
+    else { setInviteId(meta.id); setNotice("Cole o convite completo para entrar novamente."); }
+  }
+  function leave() {
+    socketRef.current?.disconnect(); socketRef.current = null;
+    setActiveRoom(null); setIdentity(null); setRoomState(null); setPresence([]); setConnected(false);
+    history.replaceState({}, "", location.pathname);
+  }
+  function send(type, payload) {
+    const connection = socketRef.current;
+    if (!connection?.connected) { setNotice("Reconectando à sala. Tente novamente em instantes."); return; }
+    connection.emit("room:action", { type, payload }, result => { if (!result?.ok) setNotice(result?.error || "Não foi possível salvar."); });
+  }
+  async function uploadFile(file, options = {}) {
+    if (!activeRoom || !identity) throw new Error("Entre na sala antes de enviar arquivos.");
+    const query = new URLSearchParams({ scope: options.scope || "public", kind: options.kind || "file" });
+    const response = await fetch(API_BASE + "/api/rooms/" + encodeURIComponent(activeRoom.id) + "/uploads?" + query, {
+      method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "x-room-token": identity.token, "x-file-name": encodeURIComponent(file.name) }, body: file
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(saved.error || "Não foi possível enviar o arquivo.");
+    return { ...saved, url: saved.url && saved.url.startsWith("/") ? API_BASE + saved.url : saved.url };
+  }
+  async function getSignedUrl(file) {
+    if (!activeRoom || !identity) throw new Error("Entre na sala para abrir o arquivo.");
+    const result = await api("/api/rooms/" + encodeURIComponent(activeRoom.id) + "/files/signed-url", {
+      method: "POST", headers: { "x-room-token": identity.token }, body: JSON.stringify({ bucket: file.bucket, path: file.path })
+    });
+    return result.url && result.url.startsWith("/") ? API_BASE + result.url : result.url;
+  }
+
+  if (!activeRoom || !identity) return <Home inviteId={inviteId} setInviteId={setInviteId} rooms={rooms} onCreate={createRoom} onJoin={joinRoom} onResume={resume} busy={busy} notice={notice}/>;
+  if (!roomState) return <div className="loading-screen"><div className="wordmark">Mesa <span>&</span> Dados</div><p>Conectando à sala…</p></div>;
+
+  const isGM = identity.role === "gm";
+  const tabs = [["lobby", "Sala"], ["workbench", "Painel"]].concat(isGM ? [["gmShield", "Escudo do Mestre"]] : []).concat(MODULES.filter(([key]) => key === "gmDocs" ? isGM : isGM || roomState.modules[key]).map(([key, label]) => [key, label]));
+  const inviteUrl = location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
+  return <div className="app-shell">
+    <aside className="rail"><div className="wordmark">M<span>&</span>D</div><div className="rail-campaign"><small>MESA ATUAL</small><strong>{roomState.campaign.title}</strong><span>{roomState.campaign.system || "Sistema a definir"}</span></div>
+      <nav className="room-nav">{tabs.map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</nav>
+      <div className="rail-bottom"><span className={"connection " + (connected ? "online" : "")}></span>{connected ? "Conectado" : "Reconectando"}<button onClick={leave}>Sair da sala</button></div>
+    </aside>
+    <main className="main-area"><header className="topline"><div><span className="crumb">Mesa & Dados</span><span className="slash">/</span><strong>{tabs.find(item => item[0] === tab)?.[1] || "Sala"}</strong></div><div className="user-chip"><span className="role-tag">{isGM ? "MESTRE" : "JOGADOR"}</span><span>{identity.name}</span></div></header>
+      <div className="page-body">
+        {tab === "lobby" && <Lobby room={roomState} presence={presence} isGM={isGM} inviteUrl={inviteUrl} send={send}/>}
+        {tab === "workbench" && <Workbench room={roomState} presence={presence} isGM={isGM} onOpen={setTab}/>}
+        {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} send={send}/>}
+        {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send}/>}
+        {tab === "system" && <SystemGuide value={roomState.systemGuide?.text || ""} isGM={isGM} send={send}/>}
+        {tab === "characters" && <Characters room={roomState} identity={identity} system={roomState.campaign.system} isGM={isGM} send={send} upload={uploadFile}/>}
+        {tab === "lore" && <Lore value={roomState.lore.text} isGM={isGM} send={send}/>}
+        {tab === "npcs" && <NPCs items={roomState.npcs} isGM={isGM} send={send} upload={uploadFile}/>}
+        {tab === "handouts" && <Handouts items={roomState.handouts} isGM={isGM} send={send} upload={uploadFile}/>}
+        {tab === "maps" && <Maps value={roomState.map} room={roomState} identity={identity} isGM={isGM} send={send} upload={uploadFile}/>}
+        <div className={tab === "music" ? "music-global-visible" : "music-global-background"}><Music value={roomState.music} isGM={isGM} send={send}/></div>
+        {tab === "diary" && <Diary value={roomState.notes} journal={roomState.journal || []} identity={identity} isGM={isGM} send={send}/>}
+        {tab === "sessions" && <Sessions items={roomState.sessions} count={roomState.campaign.sessionCount} isGM={isGM} send={send}/>}
+        {tab === "gmDocs" && isGM && <GMDocuments items={roomState.gmDocs || []} upload={uploadFile} getSignedUrl={getSignedUrl} send={send}/>}
+        {tab === "pdfs" && <PDFWorkshop items={roomState.pdfs || []} room={roomState} identity={identity} isGM={isGM} system={roomState.campaign.system} upload={uploadFile} getSignedUrl={getSignedUrl} send={send}/>}
+        {tab === "library" && <CommunityLibrary room={roomState} identity={identity} items={[]} upload={uploadFile}/>}
+      </div>
+    </main>
+    {notice && <div className="toast">{notice}</div>}
+  </div>;
+}
