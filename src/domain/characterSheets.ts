@@ -27,7 +27,7 @@ interface SheetIdentity {
 export interface OrdemParanormalSheet extends SheetIdentity {
   readonly system: "Ordem Paranormal 2";
   readonly attributes: Readonly<{ physical: number; mind: number; emotion: number }>;
-  readonly resources: Readonly<{ hitPoints: ResourceTrack; effort: ResourceTrack; sanity: ResourceTrack; nexus: ResourceTrack; wear: ResourceTrack }>;
+  readonly resources: Readonly<{ hitPoints: ResourceTrack; determination: ResourceTrack }>;
   readonly className: string;
   readonly level: number;
   readonly skills: Readonly<Record<string, number>>;
@@ -99,6 +99,7 @@ export interface DndSheet extends SheetIdentity {
   readonly proficiencyBonus: number;
   readonly savingThrows: readonly string[];
   readonly skillProficiencies: readonly string[];
+  readonly skillExpertise: readonly string[];
   readonly armorClass: number;
   readonly initiative: number;
   readonly speed: number;
@@ -125,7 +126,7 @@ export interface SacramentoSheet extends SheetIdentity {
   ];
   readonly combatActions: readonly string[];
   readonly backgrounds: readonly string[];
-  readonly mount: Readonly<{ name: string; power: number; resistance: number }>;
+  readonly mount: Readonly<{ name: string; type: string; power: number; resistance: number; equipment: readonly string[] }>;
 }
 
 export interface AssimilacaoLegacySheet extends SheetIdentity {
@@ -163,7 +164,7 @@ export function createBlankSheet(system: SystemId, characterId: string, playerId
   const base = identity(characterId, playerId, name);
   switch (system) {
     case "Ordem Paranormal 2":
-      return { ...base, system, attributes: { physical: 0, mind: 0, emotion: 0 }, resources: { hitPoints: track(), effort: track(), sanity: track(), nexus: track(), wear: track() }, className: "", level: 1, skills: {}, skillModifiers: {}, levelMarks: [], relationships: [], appearance: "", inventory: [] };
+      return { ...base, system, attributes: { physical: 0, mind: 0, emotion: 0 }, resources: { hitPoints: track(), determination: track() }, className: "", level: 1, skills: {}, skillModifiers: {}, levelMarks: [], relationships: [], appearance: "", inventory: [] };
     case "Daggerheart":
       return { ...base, system, attributes: { agility: 0, strength: 0, finesse: 0, instinct: 0, presence: 0, knowledge: 0 }, evasion: 0, damageThresholds: { minor: 0, major: 0, severe: 0 }, resources: { hitPoints: track(), stress: track(), hope: track(), armor: track() }, domains: [], subclasses: [], className: "", level: 1, inventory: [] };
     case "Call of Cthulhu":
@@ -174,9 +175,9 @@ export function createBlankSheet(system: SystemId, characterId: string, playerId
       return { ...base, system, qualityAssurances: { attentiveness: 0, duplicity: 0, dynamism: 0, empathy: 0, initiative: 0, persistence: 0, presence: 0, professionalism: 0, subtlety: 0 }, realityStatus: {}, competency: 0, anomalies: [], requisitions: [], chaosPool: track(), missionHistory: [] };
     case "D&D 5.5E (2024)":
     case "D&D 5E":
-      return { ...base, system, abilities: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }, proficiencyBonus: 2, savingThrows: [], skillProficiencies: [], armorClass: 10, initiative: 0, speed: 30, hitPoints: { ...track(), temporary: 0 }, spellSlots: { 1: track(), 2: track(), 3: track(), 4: track(), 5: track(), 6: track(), 7: track(), 8: track(), 9: track() }, originFeats: [], classFeatures: [], className: "", level: 1 };
+      return { ...base, system, abilities: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }, proficiencyBonus: 2, savingThrows: [], skillProficiencies: [], skillExpertise: [], armorClass: 10, initiative: 0, speed: 30, hitPoints: { ...track(), temporary: 0 }, spellSlots: { 1: track(), 2: track(), 3: track(), 4: track(), 5: track(), 6: track(), 7: track(), 8: track(), 9: track() }, originFeats: [], classFeatures: [], className: "", level: 1 };
     case "Sacramento":
-      return { ...base, system, attributes: { physical: 0, speed: 0, intellect: 0, courage: 0 }, lifeCircles: emptyCircles(), painCircles: emptyPainCircles(), combatActions: [], backgrounds: [], mount: { name: "", power: 0, resistance: 0 } };
+      return { ...base, system, attributes: { physical: 0, speed: 0, intellect: 0, courage: 0 }, lifeCircles: emptyCircles(), painCircles: emptyPainCircles(), combatActions: [], backgrounds: [], mount: { name: "", type: "", power: 0, resistance: 0, equipment: [] } };
     case "Assimilação RPG":
       return { ...base, system, archetype: "", vigor: track(), integrity: track(), progress: 0, conditions: [], customFields: {} };
   }
@@ -193,11 +194,13 @@ export interface AdaptiveSheetInput {
 
 const statText = (input: AdaptiveSheetInput, key: string): string => String(input.stats[key] ?? "").trim();
 const statNumber = (input: AdaptiveSheetInput, key: string, fallback = 0): number => {
-  const value = Number(statText(input, key));
+  const value = Number(statText(input, key).split("/")[0]);
   return Number.isFinite(value) ? value : fallback;
 };
 const statList = (input: AdaptiveSheetInput, key: string): string[] => statText(input, key).split(/[\n,;]/).map(value => value.trim()).filter(Boolean);
 const statNumbers = (input: AdaptiveSheetInput, key: string): number[] => statText(input, key).match(/-?\d+(?:\.\d+)?/g)?.map(Number).filter(Number.isFinite) || [];
+const parseSpellSlots = (input: AdaptiveSheetInput): DndSheet["spellSlots"] => { const slots = Object.fromEntries(([1,2,3,4,5,6,7,8,9] as const).map(circle => [circle, track()])); for (const entry of statText(input,"spellSlots").split(";")) { const match=entry.match(/^\s*(\d)\s*:\s*(\d+)\s*\/\s*(\d+)\s*$/); if(match&&Number(match[1])>=1) slots[Number(match[1]) as SpellCircle]={current:Number(match[2]),max:Number(match[3])}; } return Object.freeze(slots) as DndSheet["spellSlots"]; };
+const featureCounters = (input: AdaptiveSheetInput): DndSheet["classFeatures"] => Object.freeze(statText(input,"classFeatures").split(/\r?\n/).map(entry=>{ const [name,current,max,die] = entry.split("|"); return { name:(name||"").trim(), uses:{current:Math.max(0,Number(current)||0),max:Math.max(0,Number(max)||0)}, ...(die==="d8"||die==="d10"||die==="d12"?{die:die as "d8"|"d10"|"d12"}: {}) }; }).filter(item=>item.name));
 const statTrack = (input: AdaptiveSheetInput, key: string): ResourceTrack => {
   const [currentText, maxText] = statText(input, key).split("/").map(value => value.trim());
   const current = Math.max(0, Number(currentText) || 0), max = Math.max(current, Number(maxText) || current);
@@ -220,7 +223,7 @@ export function buildCharacterSheet(system: SystemId, characterId: string, playe
   switch (system) {
     case "Ordem Paranormal 2": {
       const sheet = base as OrdemParanormalSheet;
-      return { ...sheet, ...identityFields, attributes: { physical: statNumber(input, "physical"), mind: statNumber(input, "mind"), emotion: statNumber(input, "emotion") }, resources: { hitPoints: statTrack(input, "pv"), effort: statTrack(input, "pe"), sanity: statTrack(input, "san"), nexus: statTrack(input, "nexus"), wear: statTrack(input, "pd") }, className: statText(input, "classe") || input.classLevel || "", level: parseLevel(input), skills: numericEntries(input, "pericias"), skillModifiers: {}, levelMarks: Object.freeze(Array.from({ length: parseLevel(input) }, () => false)), relationships: Object.freeze(statList(input, "relacoes")), appearance: input.appearance || "", inventory: Object.freeze(statList(input, "inventory")) };
+      return { ...sheet, ...identityFields, attributes: { physical: statNumber(input, "physical"), mind: statNumber(input, "mind"), emotion: statNumber(input, "emotion") }, resources: { hitPoints: statTrack(input, "pv"), determination: statTrack(input, "pd") }, className: statText(input, "classe") || input.classLevel || "", level: parseLevel(input), skills: numericEntries(input, "pericias"), skillModifiers: {}, levelMarks: Object.freeze(Array.from({ length: parseLevel(input) }, () => false)), relationships: Object.freeze(statList(input, "relacoes")), appearance: input.appearance || "", inventory: Object.freeze(statList(input, "inventory")) };
     }
     case "Daggerheart": {
       const sheet = base as DaggerheartSheet;
@@ -240,13 +243,12 @@ export function buildCharacterSheet(system: SystemId, characterId: string, playe
     }
     case "D&D 5.5E (2024)":
     case "D&D 5E": {
-      const sheet = base as DndSheet, slots = statNumbers(input, "spellSlots");
-      const spellSlots = Object.freeze(Object.fromEntries(([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((circle, index) => [circle, track(slots[index] || 0)]))) as DndSheet["spellSlots"];
-      return { ...sheet, ...identityFields, abilities: { strength: statNumber(input, "strength", 10), dexterity: statNumber(input, "dexterity", 10), constitution: statNumber(input, "constitution", 10), intelligence: statNumber(input, "intelligence", 10), wisdom: statNumber(input, "wisdom", 10), charisma: statNumber(input, "charisma", 10) }, proficiencyBonus: statNumber(input, "proficiencyBonus", 2), savingThrows: Object.freeze(statList(input, "savingThrows")), skillProficiencies: Object.freeze(statList(input, "skillProficiencies")), armorClass: statNumber(input, "ac", 10), initiative: statNumber(input, "initiative"), speed: statNumber(input, "speed", 30), hitPoints: { ...statTrack(input, "hp"), temporary: 0 }, spellSlots, originFeats: Object.freeze(statList(input, "originFeats")), classFeatures: Object.freeze(statList(input, "classFeatures").map(name => ({ name, uses: track() }))), className: input.classLevel || "", level: parseLevel(input, "level") };
+      const sheet = base as DndSheet, spellSlots = parseSpellSlots(input);
+      return { ...sheet, ...identityFields, abilities: { strength: statNumber(input, "strength", 10), dexterity: statNumber(input, "dexterity", 10), constitution: statNumber(input, "constitution", 10), intelligence: statNumber(input, "intelligence", 10), wisdom: statNumber(input, "wisdom", 10), charisma: statNumber(input, "charisma", 10) }, proficiencyBonus: statNumber(input, "proficiencyBonus", 2), savingThrows: Object.freeze(statList(input, "savingThrows")), skillProficiencies: Object.freeze(statText(input, "skillProficiencies").split(/[\n,;]/).map(entry => entry.split(/[=:]/)).filter(parts => parts.length > 1 && parts[1].trim()).map(parts => parts[0].trim())), skillExpertise: Object.freeze(statText(input, "skillProficiencies").split(/[\n,;]/).map(entry => entry.split(/[=:]/)).filter(parts => parts.length > 1 && parts[1].trim()==="expertise").map(parts => parts[0].trim())), armorClass: statNumber(input, "ac", 10), initiative: statNumber(input, "initiative"), speed: statNumber(input, "speed", 30), hitPoints: { ...statTrack(input, "hp"), temporary: statNumber(input, "hpTemp") }, spellSlots, originFeats: Object.freeze(statList(input, "originFeats")), classFeatures: featureCounters(input), className: input.classLevel || "", level: parseLevel(input, "level") };
     }
     case "Sacramento": {
       const sheet = base as SacramentoSheet, life = circleMarks(input, "lifeCircles"), pain = circleMarks(input, "painCircles");
-      return { ...sheet, ...identityFields, attributes: { physical: statNumber(input, "physical"), speed: statNumber(input, "speed"), intellect: statNumber(input, "intellect"), courage: statNumber(input, "courage") }, lifeCircles: Object.freeze(sheet.lifeCircles.map((circle, index) => ({ ...circle, marked: life[index] }))) as SixCircles, painCircles: Object.freeze(sheet.painCircles.map((circle, index) => ({ ...circle, marked: pain[index] }))) as SacramentoSheet["painCircles"], combatActions: Object.freeze(statList(input, "combatActions")), backgrounds: Object.freeze(statList(input, "backgrounds")), mount: { name: statText(input, "mountName"), power: statNumber(input, "mountPower"), resistance: statNumber(input, "mountResistance") } };
+      return { ...sheet, ...identityFields, attributes: { physical: statNumber(input, "physical"), speed: statNumber(input, "speed"), intellect: statNumber(input, "intellect"), courage: statNumber(input, "courage") }, lifeCircles: Object.freeze(sheet.lifeCircles.map((circle, index) => ({ ...circle, marked: life[index] }))) as SixCircles, painCircles: Object.freeze(sheet.painCircles.map((circle, index) => ({ ...circle, marked: pain[index] }))) as SacramentoSheet["painCircles"], combatActions: Object.freeze(statList(input, "combatActions")), backgrounds: Object.freeze(statList(input, "backgrounds")), mount: { name: statText(input, "mountName"), type: statText(input, "mountType"), power: statNumber(input, "mountPower"), resistance: statNumber(input, "mountResistance"), equipment: Object.freeze(statList(input, "mountEquipment")) } };
     }
     case "Assimilação RPG": {
       const sheet = base as AssimilacaoLegacySheet;

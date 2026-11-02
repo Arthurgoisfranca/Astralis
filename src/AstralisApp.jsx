@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { MODULES, Home, Lobby } from "./AppShell.jsx";
 import { sha256Hex } from "./SharedTools.jsx";
-import { Agenda, CommunityLibrary, Diary, GMDocuments, GMShield, Handouts, Lore, Maps, Music, NPCs, PDFWorkshop, Sessions, SystemGuide, Characters, Workbench } from "./CampaignModules.jsx";
+import { Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, Music, NPCs, PDFWorkshop, Sessions, SystemGuide, Characters, Workbench } from "./CampaignModules.jsx";
 
 const ROOM_LIST = "mesa-dados:rooms";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
@@ -170,7 +170,7 @@ export default function App() {
       <div className="page-body">
         {tab === "lobby" && <Lobby room={roomState} presence={presence} isGM={isGM} inviteUrl={inviteUrl} send={send}/>}
         {tab === "workbench" && <Workbench room={roomState} presence={presence} isGM={isGM} onOpen={setTab}/>}
-        {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} send={send}/>}
+        {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} tracker={roomState.gmShield?.tracker} send={send}/>}
         {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send}/>}
         {tab === "system" && <SystemGuide value={roomState.systemGuide?.text || ""} isGM={isGM} send={send}/>}
         {tab === "characters" && <Characters room={roomState} identity={identity} system={roomState.campaign.system} isGM={isGM} send={send} upload={uploadFile}/>}
@@ -186,6 +186,7 @@ export default function App() {
         {tab === "library" && <CommunityLibrary room={roomState} identity={identity} items={[]} upload={uploadFile}/>}
       </div>
     </main>
+    {isGM && tab!=="gmShield" && <GMQuickShield system={roomState.campaign.system}/>}
     {notice && <div className="toast">{notice}</div>}
   </div>;
 }

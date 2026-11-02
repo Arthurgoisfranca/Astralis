@@ -6,7 +6,7 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { SYSTEMS, systemProfile } from "./RpgSystems.js";
 import { buildCharacterSheet } from "./domain/characterSheets.ts";
-import { callOfCthulhuThresholds, daggerheartDamage, dndAbilityModifiers, isWithinDamageThresholds, vampireDicePool } from "./domain/sheetCalculations.ts";
+import { CharacterStudio } from "./CharacterStudio.jsx";
 
 let pdfToolsPromise; async function loadPdfTools() { if (!pdfToolsPromise) pdfToolsPromise = Promise.all([import("pdf-lib"), import("pdfjs-dist")]).then(([pdfLib, pdfjsLib]) => { pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl; return { PDFDocument: pdfLib.PDFDocument, pdfjsLib }; }); return pdfToolsPromise; }
 
@@ -296,54 +296,31 @@ export function Characters({ room, identity, system, isGM, send, upload }) {
       return <article className="surface character-card" key={player.id}>{player.character?.token && <img className="character-token" src={player.character.token} alt={"Token de " + player.character.name}/>}<div className="character-body"><div className="section-eyebrow">{player.name}</div><h2>{player.character?.name || "Ficha não criada"}</h2><p>{player.character ? [player.character.classLevel, ...primary, player.character.hp ? "PV " + player.character.hp : "", player.character.ac ? "CA " + player.character.ac : ""].filter(Boolean).join(" · ") : "A ficha ainda está vazia."}</p><button className="button secondary" onClick={() => setEditing(player)}>{player.character ? "Editar ficha" : "Criar ficha"}</button></div></article>;
     })}</div>
     {!targets.length && <Empty>Entre na sala como jogador para criar sua ficha.</Empty>}
-    {editing && <CharacterEditor player={editing} profile={profile} system={system} upload={upload} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/>}
+    {editing && <CharacterStudio key={editing.id} player={editing} profile={profile} system={system} upload={upload} send={send} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/>}
   </div>;
 }
-function CharacterEditor({ player, profile, system, upload, onClose, onSave }) {
-  const existing = player.character || {};
-  const [form, setForm] = useState({ name: existing.name || "", classLevel: existing.classLevel || "", hp: existing.hp || "", mp: existing.mp || "", ac: existing.ac || "", stats: existing.stats || {}, attributes: existing.attributes || "", appearance: existing.appearance || "", inventory: existing.inventory || "", notes: existing.notes || "", token: existing.token || "", pdf: existing.pdf || null });
-  const [tokenOpen, setTokenOpen] = useState(false), [saving, setSaving] = useState(false);
-  const set = key => event => setForm(old => ({ ...old, [key]: event.target.value }));
-  const numericStat = key => Number(form.stats[key]) || 0;
-  const derived = system?.startsWith("D&D") ? dndAbilityModifiers({ strength: Number(form.stats.strength) || 10, dexterity: Number(form.stats.dexterity) || 10, constitution: Number(form.stats.constitution) || 10, intelligence: Number(form.stats.intelligence) || 10, wisdom: Number(form.stats.wisdom) || 10, charisma: Number(form.stats.charisma) || 10 }) : null;
-  const cocThresholds = system === "Call of Cthulhu" && /^\d+$/.test(form.stats.skills || "") ? callOfCthulhuThresholds(numericStat("skills")) : null;
-  const daggerThresholds = system === "Daggerheart" ? { minor: numericStat("minor"), major: numericStat("major"), severe: numericStat("severe") } : null;
-  const daggerResult = daggerThresholds && numericStat("damage") > 0 ? daggerheartDamage(numericStat("damage"), daggerThresholds) : null;
-  const vampirePool = system?.startsWith("Vampire") ? vampireDicePool(numericStat("pool"), numericStat("hunger")) : null;
-  async function save(event) {
-    event.preventDefault(); setSaving(true);
-    try {
-      const next = { ...form };
-      if (form.token?.startsWith("data:image/") && upload) {
-        const response = await fetch(form.token), blob = await response.blob();
-        const uploaded = await upload(new File([blob], "token-" + makeId() + ".png", { type: blob.type || "image/png" }), { scope: "public", kind: "character" });
-        next.token = uploaded.url;
-      }
-      next.sheet = buildCharacterSheet(system, player.id, player.id, { name: form.name, classLevel: form.classLevel, portraitUrl: next.token || null, notes: form.notes, appearance: form.appearance, inventory: form.inventory, stats: form.stats });
-      await onSave(next);
-    } catch (error) { alert(error.message || "Não foi possível salvar a ficha."); }
-    finally { setSaving(false); }
-  }
-  return <Modal title={"Ficha de " + player.name} onClose={onClose}><form className="character-form" onSubmit={save}>
-    <label>Nome do personagem<input required value={form.name} onChange={set("name")}/></label><label>Classe / nível<input value={form.classLevel} onChange={set("classLevel")}/></label>
-    <div className="adaptive-stats">{profile.fields.map(([key, label]) => <label key={key}>{label}<input value={form.stats[key] || ""} onChange={event => setForm(old => ({ ...old, stats: { ...old.stats, [key]: event.target.value } }))}/></label>)}</div>{derived && <p className="sheet-derived">Modificadores: FOR {derived.strength >= 0 ? "+" : ""}{derived.strength} · DES {derived.dexterity >= 0 ? "+" : ""}{derived.dexterity} · CON {derived.constitution >= 0 ? "+" : ""}{derived.constitution} · INT {derived.intelligence >= 0 ? "+" : ""}{derived.intelligence} · SAB {derived.wisdom >= 0 ? "+" : ""}{derived.wisdom} · CAR {derived.charisma >= 0 ? "+" : ""}{derived.charisma}</p>}{cocThresholds && <p className="sheet-derived">Testes (%): regular {cocThresholds.regular} · difícil {cocThresholds.hard} · extremo {cocThresholds.extreme}</p>}{daggerThresholds && !isWithinDamageThresholds(daggerThresholds) && <p className="sheet-derived warning">Revise os limiares: menor ≤ maior ≤ severo.</p>}{daggerResult && <p className="sheet-derived">Dano informado: {daggerResult.severity}{daggerResult.overflow ? " · excede o limiar severo em " + daggerResult.overflow : ""}.</p>}{vampirePool && <p className="sheet-derived">Conjunto: {vampirePool.normalDice} dados normais + {vampirePool.hungerDice} de Fome.</p>}
-    <label>Atributos<textarea value={form.attributes} onChange={set("attributes")} placeholder="Atributos, perícias e valores secundários"/></label><label>Aparência<textarea value={form.appearance} onChange={set("appearance")}/></label><label>Inventário<textarea value={form.inventory} onChange={set("inventory")}/></label><label>Notas<textarea value={form.notes} onChange={set("notes")}/></label>
-    <div className="token-inline">{form.token && <img src={form.token} alt="Token do personagem"/>}<button type="button" className="button quiet" onClick={() => setTokenOpen(true)}>Criar ou trocar token</button>{form.pdf && <span className="muted-copy">PDF: {form.pdf.name}</span>}</div>
-    <div className="modal-actions"><button type="button" className="button quiet" onClick={onClose}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar ficha"}</button></div>
-    {tokenOpen && <TokenMaker initial={form.token} onClose={() => setTokenOpen(false)} onSave={token => { setForm(old => ({ ...old, token })); setTokenOpen(false); }}/>}
-  </form></Modal>;
+function ShieldReferencePanel({ section }) {
+  return <section className="surface shield-reference">
+    <div className="section-eyebrow">{section.title}</div>
+    <div className="reference-list">{section.items.map(([label, detail]) => <article key={label}><b>{label}</b><p>{detail}</p></article>)}</div>
+  </section>;
 }
-export function GMShield({ system, value, send }) {
+
+function GMThreatTracker({system,tracker,send}) {
+  const key=system==="Triangle Agency"?"chaos":"fear",title=system==="Triangle Agency"?"Reserva de Caos":"Reserva de Medo",count=Number(tracker?.[key])||0,cap=system==="Daggerheart"?12:24;
+  return <section className="gm-tracker"><div className="gm-tracker-copy"><span className="section-eyebrow">CONTROLE DA CENA</span><h2>{title}</h2><p>{system==="Triangle Agency"?"Dados diferentes de 3 alimentam a reserva.":"A reserva começa com um ponto por personagem e cresce com resultados de Medo."}</p></div><div className="gm-tracker-meter"><strong>{count}</strong><div className="gm-tracker-pips">{Array.from({length:Math.min(cap,12)},(_,i)=><i key={i} className={i<count?"filled":""}/>)}</div><small>{count>12?"+"+(count-12)+" além do marcador":system==="Daggerheart"?"limite 12":"pontos acumulados"}</small></div><div className="gm-tracker-actions"><button onClick={()=>send("gm:tracker:update",{key,value:Math.max(0,count-1)})}>−</button><button onClick={()=>send("gm:tracker:update",{key,value:count+1})}>+</button><button onClick={()=>send("gm:tracker:update",{key,value:0})}>Zerar</button></div><div className="gm-roll-log">{(tracker?.rolls||[]).slice(0,4).map(item=><span key={item.id}>{item.actor||"Jogador"} · {item.summary}</span>)}</div></section>;
+}
+export function GMQuickShield({system}) { const shield=systemProfile(system).shield; return <details className="gm-quick-shield"><summary><span>Consulta rápida</span><small>{shield.source}</small></summary><div className="gm-quick-body">{shield.sections.map(section=><details key={section.title}><summary>{section.title}</summary><div>{section.items.map(([label,detail])=><article key={label}><b>{label}</b><p>{detail}</p></article>)}</div></details>)}</div></details>; }
+export function GMShield({ system, value, tracker, send }) {
   const profile = systemProfile(system);
+  const shield = profile.shield;
   const [note, setNote] = useState(value || "");
-  const conditions = [["Amedrontado", "O medo limita aproximações ou escolhas."], ["Atordoado", "Ações ou reações podem ficar limitadas."], ["Caído", "A personagem está no chão; levantar costuma exigir movimento."], ["Envenenado", "Efeito nocivo com duração e consequência definidas pela regra."], ["Impedido", "O deslocamento ou certas ações estão restringidos."]];
-  const difficulties = [["Baixa", "Risco pequeno ou vantagem evidente."], ["Moderada", "Exige atenção e uma abordagem adequada."], ["Elevada", "Pede preparo, recurso ou oportunidade."], ["Extrema", "Alto risco; sucesso pode ter custo."]];
   useEffect(() => setNote(value || ""), [value]);
-  return <div className="view-stack"><ModuleHeader eyebrow="VISÍVEL APENAS AO MESTRE" title="Escudo do Mestre" description={system || "Sistema ainda não selecionado"}/>
-    <div className="shield-grid"><section className="surface shield-reference"><div className="section-eyebrow">COLA RÁPIDA · {system || "MESA"}</div><div className="reference-list">{profile.references.map(([label, detail]) => <article key={label}><b>{label}</b><p>{detail}</p></article>)}</div></section>
-      <section className="surface shield-reference"><div className="section-eyebrow">CONDIÇÕES DA CENA</div><div className="condition-list">{conditions.map(([name, detail]) => <article key={name}><b>{name}</b><p>{detail}</p></article>)}</div><p className="muted-copy">Os efeitos mecânicos dependem da edição e dos acordos da mesa.</p></section>
-      <section className="surface shield-reference difficulty-reference"><div className="section-eyebrow">ESCALA DE DIFICULDADE</div><div className="difficulty-list">{difficulties.map(([name, detail]) => <article key={name}><b>{name}</b><span>{detail}</span></article>)}</div><p className="muted-copy">Defina DT, número-alvo ou custo usando a regra do sistema selecionado.</p></section>
-      <section className="surface writing-surface shield-notes"><div className="section-eyebrow">ANOTAÇÕES PRIVADAS DO MESTRE</div><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Dificuldades, condições e tabelas desta campanha."/><button className="button secondary" onClick={() => send("gm:shield:update", { value: note })}>Salvar cola da mesa</button></section>
+  return <div className="view-stack"><ModuleHeader eyebrow="VISÍVEL APENAS AO MESTRE" title="Escudo do Mestre" description={shield.scope}/>
+    <div className="shield-context"><span className="shield-source">{shield.source}</span>{shield.notice && <p className="shield-notice">{shield.notice}</p>}</div>
+    {["Triangle Agency","Daggerheart"].includes(system)&&<GMThreatTracker system={system} tracker={tracker} send={send}/> }
+    <div className="shield-grid">{shield.sections.map(section => <ShieldReferencePanel key={section.title} section={section}/>)}
+      <section className="surface writing-surface shield-notes"><div className="section-eyebrow">ANOTAÇÕES PRIVADAS DO MESTRE</div><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Regras da casa, valores definidos para a campanha e lembretes da próxima sessão."/><button className="button secondary" onClick={() => send("gm:shield:update", { value: note })}>Salvar anotações do escudo</button></section>
     </div>
   </div>;
 }
@@ -371,9 +348,43 @@ function AcroField({ field, value, onChange }) { return <label>{field.name}{fiel
 function fieldValue(field) { try { if (typeof field.getText === "function") return field.getText() || ""; if (typeof field.isChecked === "function") return field.isChecked() ? "Sim" : "Não"; if (typeof field.getSelected === "function") return (field.getSelected() || []).join(", "); } catch (_) {}
   return "";
 }
+function normalizePdfLabel(value) { return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+function pdfFormStatKey(name,system) { const value=normalizePdfLabel(name); if(system&&system.startsWith("D&D")) { const map={str:"strength",dex:"dexterity",con:"constitution",int:"intelligence",wis:"wisdom",cha:"charisma",profbonus:"proficiencyBonus",ac:"ac",initiative:"initiative",speed:"speed",hp:"hpCurrent",hitpoints:"hpCurrent",hpcurrent:"hpCurrent",hpmax:"hpMax",maxhp:"hpMax",hptemp:"hpTemp",passive:"passivePerception",passiveperception:"passivePerception",classlevel:"className",background:"background",alignment:"alignment",xp:"experience",inspiration:"inspiration",cp:"cp",sp:"sp",ep:"ep",gp:"gp",pp:"pp",spellcastingability2:"spellcastingAbility",spellsavedc2:"spellDC",spellatkbonus2:"spellAttack",proficiencieslang:"languagesProficiencies",feattraits:"originFeats",equipment:"equipmentText",featurestraits:"classResources"}; return map[value]||null; } if(system==="Call of Cthulhu") { const map={str:"str",dex:"dex",con:"con",app:"app",edu:"edu",siz:"siz",int:"int",pow:"pow",san:"sanCurrent",sanity:"sanCurrent",sanitycurrent:"sanCurrent",sanitystart:"sanCurrent",sanitymax:"sanMax",lucktotal:"luck",hp:"hpCurrent",currenthp:"hpCurrent",hitpoints:"hpCurrent",maxhp:"hpMax",hpmax:"hpMax",nome:"characterName",build:"build",mov:"movement"}; return map[value]||null; } if(system&&system.startsWith("Vampire")){const map={"nomepersonagem":"characterName","cla":"clan","clan":"clan","geracao":"generation","fome":"hunger","humanidade":"humanity","pds":"bloodPotency"};return map[value]||null;} if(system==="Triangle Agency"){const map={"charactername":"characterName","chaospool":"chaosPool","reality":"realityStatus","competency":"competency","anomalyname":"anomalyName","anomalybehavior":"anomalyBehavior","anomalyfocus":"anomalyFocus","anomalydomain":"anomalyDomain","realitytrigger":"realityTrigger","burnoutrelease":"burnoutRelease","anomalyalias":"anomalyAlias","requisition1name":"requisition1Name","requisition1pagepdcode":"requisition1Code","requisition1effect":"requisition1Effect","requisition2name":"requisition2Name","requisition2pagepdcode":"requisition2Code","requisition2effect":"requisition2Effect","requisition3name":"requisition3Name","requisition3pagepdcode":"requisition3Code","requisition3effect":"requisition3Effect","requisition4name":"requisition4Name","requisition4pagepdcode":"requisition4Code","requisition4effect":"requisition4Effect","requisition5name":"requisition5Name","requisition5pagepdcode":"requisition5Code","requisition5effect":"requisition5Effect","requisition6name":"requisition6Name","requisition6pagepdcode":"requisition6Code","requisition6effect":"requisition6Effect"};return map[value]||null;} const fields=systemProfile(system).fields; return fields.find(([key,label])=>value===normalizePdfLabel(key)||value===normalizePdfLabel(label))?.[0]||null; }
+function pdfFormSuggestions(fields,system){
+ const result={},indexed=new Map(fields.map(field=>[normalizePdfLabel(field.name),field])),get=name=>indexed.get(normalizePdfLabel(name))?.value||"",textFields=fields.filter(field=>field.type!=="PDFCheckBox"&&field.value);
+ for(const field of textFields){const key=pdfFormStatKey(field.name,system);if(key)result[key]=field.value;}
+ const checked=(prefix,max)=>Array.from({length:Math.min(max,9)},(_,i)=>indexed.get(normalizePdfLabel(prefix+(i+1)))).filter(field=>field?.value==="Sim").length+(max===10&&indexed.get(normalizePdfLabel(prefix+"0"))?.value==="Sim"?1:0);
+ if(system&&system.startsWith("D&D")){
+  result.characterName=get("CharacterName")||get("CharacterName 2")||result.characterName;
+  const hpCurrent=result.hpCurrent,hpMax=result.hpMax;if(hpCurrent||hpMax)result.hp=(hpCurrent||"0")+"/"+(hpMax||hpCurrent||"0");delete result.hpCurrent;delete result.hpMax;
+  const slots=[];for(let circle=1;circle<=9;circle++){const suffix=18+circle,total=Number(get("SlotsTotal "+suffix)),remaining=Number(get("SlotsRemaining "+suffix));if(total||remaining)slots.push(circle+":"+Math.max(0,total-remaining)+"/"+total);}if(slots.length)result.spellSlots=slots.join(";");
+  const spells=textFields.filter(field=>/^spells\s/i.test(field.name)).map(field=>String(field.value).trim()).filter(Boolean);if(spells.length)result.spells=spells.join("\n");
+  const weapons=[];for(let index=1;index<=3;index++){const suffix=index===1?"":" "+index,name=get("Wpn Name"+suffix),attack=get("Wpn"+index+" AtkBonus"),damage=get("Wpn"+index+" Damage");if(name||attack||damage)weapons.push([name,attack,damage,"",""] .join("|"));}if(weapons.length)result.weapons=weapons.join("\n");
+  if(result.equipmentText){result.inventory=String(result.equipmentText).split(/\r?\n/).filter(Boolean).map(line=>line+"|||").join("\n");delete result.equipmentText;}
+ }
+ if(system==="Call of Cthulhu"){
+  result.characterName=get("Nome")||result.characterName;
+  const aliases={contabilidade:"Contabilidade",antropologia:"Antropologia",avaliacao:"Avaliação",arqueologia:"Arqueologia",arte:"Arte/Ofício · especialidade",artesouoficios:"Arte/Ofício · especialidade",charme:"Charme",escalar:"Escalar",computadores:"Usar Computadores",credito:"Crédito",mythos:"Mitos de Cthulhu",disfarce:"Disfarce",esquivar:"Esquivar",dirigir:"Dirigir Automóvel",eletricos:"Reparos Elétricos",mecanicos:"Reparos Mecânicos",labia:"Lábia",lutar:"Lutar · Briga",pistolas:"Armas de Fogo · Pistolas",rifles:"Armas de Fogo · Rifles/Escopetas",primeirossocorros:"Primeiros Socorros",historia:"História",intimidacao:"Intimidar",saltar:"Saltar",linguanatural:"Idioma · Nativo",linguanaturalidade:"Idioma · Nativo",linguaoutra:"Idioma · Outro",direito:"Direito",bibliotecas:"Usar Bibliotecas",escutar:"Escutar",chaveiro:"Chaveiro",medicina:"Medicina",natural:"Mundo Natural",navegacao:"Navegar",ocultismo:"Ocultismo",persuasao:"Persuadir",pilotarre:"Pilotar · especialidade",psicologia:"Psicologia",psicanalise:"Psicanálise",cavalgar:"Cavalgar",ciencia:"Ciência · especialidade",prestidigitacao:"Prestidigitação",encontrar:"Encontrar",furtividade:"Furtividade",sobrevivencia:"Sobrevivência · especialidade",natacao:"Nadar",arremessar:"Arremessar",rastrear:"Rastrear"},skills={};for(const field of textFields){const key=normalizePdfLabel(field.name),skill=aliases[key];if(skill&&/^\d{1,3}$/.test(String(field.value).trim()))skills[skill]=String(field.value).trim();}if(Object.keys(skills).length)result.skills=Object.entries(skills).map(([name,value])=>name+"="+value).join("\n");
+  const current=result.sanCurrent,max=result.sanMax;if(current||max)result.san=(current||"0")+"/"+(max||current||"0");const hp=result.hpCurrent,hpMax=result.hpMax||((Number(result.con)>0&&Number(result.siz)>0)?String(Math.floor((Number(result.con)+Number(result.siz))/10)):"");if(hp||hpMax)result.hitPoints=(hp||"0")+"/"+(hpMax||hp||"0");delete result.sanCurrent;delete result.sanMax;delete result.hpCurrent;delete result.hpMax;
+ }
+ if(system&&system.startsWith("Vampire")){
+  result.characterName=get("NOME DO PERSONAGEM")||result.characterName;
+  const dots=[["FOR","strength",5],["DES","dexterity",5],["VIG","stamina",5],["CAR","charisma",5],["MAN","manipulation",5],["AUT","composure",5],["INT","intelligence",5],["RAC","wits",5],["DET","resolve",5]];for(const [prefix,key,max] of dots){const count=checked(prefix,max);if(count)result[key]=String(count);}
+  for(const [prefix,key,max] of [["Fome","hunger",5],["Humanidade","humanity",10],["PdS","bloodPotency",10]]){const count=checked(prefix,max);if(count)result[key]=String(count);}
+  const aliases={arbr:["Luta","physical"],arfo:["Armas de Fogo","physical"],atle:["Atletismo","physical"],brig:["Briga","physical"],cond:["Condução","physical"],ladr:["Furto","physical"],ofic:["Ofícios","physical"],sobr:["Sobrevivência","physical"],emca:["Empatia com Animais","social"],etiq:["Etiqueta","social"],inti:["Intimidação","social"],lide:["Liderança","social"],manh:["Manha","social"],perf:["Performance","social"],pers:["Persuasão","social"],saga:["Intuição","social"],subt:["Lábia","social"],cien:["Ciência","social"],erud:["Acadêmicos","social"],fina:["Finanças","social"],inve:["Investigação","social"],medi:["Medicina","social"],ocul:["Ocultismo","social"],perc:["Prontidão","social"],poli:["Política","social"],tecn:["Tecnologia","social"]},skillRows={physical:{},social:{}};for(const field of fields){const match=normalizePdfLabel(field.name).match(/^([a-z]+)([1-5])$/),entry=match&&aliases[match[1]];if(entry&&field.value==="Sim")skillRows[entry[1]==="physical"?"physical":"social"][entry[0]]=(skillRows[entry[1]==="physical"?"physical":"social"][entry[0]]||0)+1;}if(Object.keys(skillRows.physical).length)result.skillsPhysical=Object.entries(skillRows.physical).map(([key,value])=>key+"="+value).join("\n");if(Object.keys(skillRows.social).length)result.skillsSocialMental=Object.entries(skillRows.social).map(([key,value])=>key+"="+value).join("\n");
+  const disciplines=[];for(let index=1;index<=6;index++){const name=get("DISCIPLINA "+index);if(name)disciplines.push(name+"|||");}if(disciplines.length)result.disciplines=disciplines.join("\n");
+ }
+ if(system==="Triangle Agency"){
+  result.characterName=get("Character Name")||result.characterName;
+  const anomalyName=result.anomalyName||get("Anomaly"),behavior=result.anomalyBehavior,focus=result.anomalyFocus,domain=result.anomalyDomain,trigger=result.realityTrigger,burnout=result.burnoutRelease;if(anomalyName||behavior||focus||domain||trigger||burnout)result.anomalies=[[anomalyName,[behavior,focus&&"Foco: "+focus,domain&&"Domínio: "+domain].filter(Boolean).join(" · "),burnout,trigger].join("|")].join("\n");
+  const requisitions=[];for(let index=1;index<=6;index++){const name=result["requisition"+index+"Name"],code=result["requisition"+index+"Code"],effect=result["requisition"+index+"Effect"];if(name||code||effect)requisitions.push([name,code,effect].join("|"));delete result["requisition"+index+"Name"];delete result["requisition"+index+"Code"];delete result["requisition"+index+"Effect"];}if(requisitions.length)result.requisitions=requisitions.join("\n");
+  ["anomalyName","anomalyBehavior","anomalyFocus","anomalyDomain","realityTrigger","burnoutRelease","anomalyAlias"].forEach(key=>delete result[key]);
+ }
+ return result;
+}
 function parseSuggestions(text, profile) {
   const result = {};
-  const aliases = { hp: "PV|pontos de vida|hit points", ac: "CA|classe de armadura|armor class", san: "SAN|sanidade", nexo: "nexo", estresse: "estresse|stress", esperanca: "esperança|hope", fome: "fome|hunger", vitalidade: "vitalidade", pv: "PV|pontos de vida", sorte: "sorte|luck", evasao: "evasão|evasion", defesa: "defesa" };
+  const aliases = { strength: "STR|FOR|força|strength", dexterity: "DEX|DES|destreza|dexterity", constitution: "CON|constituição|constitution", intelligence: "INT|inteligência|intelligence", wisdom: "WIS|SAB|sabedoria|wisdom", charisma: "CHA|CAR|carisma|charisma", hp: "PV|HP|pontos de vida|hit points", ac: "CA|AC|classe de armadura|armor class", san: "SAN|sanidade|sanity", luck: "sorte|luck", hitPoints: "HP|PV|pontos de vida|hit points", magicPoints: "PM|pontos de magia|magic points", spellSlots: "espaços de magia|spell slots", hunger: "fome|hunger", hope: "esperança|hope", stress: "fadiga|stress", evasion: "evasão|evasion", defense: "defesa", pv: "PV|pontos de vida" };
   for (const [key, label] of profile.fields) {
     const terms = aliases[key] || label;
     const match = text.match(new RegExp("(?:^|\\n|\\b)(?:" + terms + ")\\s*[:=]?\\s*(-?\\d+(?:\\s*[/|+]\\s*\\d+)?)", "i"));
@@ -393,7 +404,8 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
     if (!Object.keys(found).length) return;
     const player = room.players.find(item => item.id === targetId);
     if (!player) return;
-    const character = { ...(player.character || {}), stats: { ...(player.character?.stats || {}), ...found } };
+    const imported = { ...found }, characterName = String(imported.characterName || "").trim(), className = String(imported.className || "").trim(); delete imported.characterName;
+    const character = { ...(player.character || {}), ...(characterName ? { name: characterName } : {}), ...(className ? { classLevel: className } : {}), stats: { ...(player.character?.stats || {}), ...imported } };
     character.sheet = buildCharacterSheet(system, targetId, targetId, { name: character.name || player.name, classLevel: character.classLevel || "", portraitUrl: character.token || null, notes: character.notes || "", appearance: character.appearance || "", inventory: character.inventory || "", stats: character.stats });
     if (pdfMeta) character.pdf = { name: pdfMeta.fileName, bucket: pdfMeta.bucket, path: pdfMeta.path };
     const result = await send("character:save", { ownerId: targetId, character });
@@ -413,11 +425,7 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
       text += content.items.map(item => item.str || "").join(" ") + "\n";
     }
     setTextContent(text);
-    const fromText = parseSuggestions(text, profile), fromForms = {};
-    for (const field of found) {
-      const key = profile.fields.find(([id, label]) => { const name = field.name.toLowerCase(); return name.includes(id.toLowerCase()) || name.includes(label.toLowerCase()); })?.[0];
-      if (key && field.value) fromForms[key] = field.value;
-    }
+    const fromText = parseSuggestions(text, profile), fromForms = pdfFormSuggestions(found,system);
     const parsed = { ...fromText, ...fromForms }; setSuggestions(parsed); await saveSuggestedStats(parsed, meta || active, meta?.ownerId || ownerId);
     if (meta) setActive(meta);
     return bytes;

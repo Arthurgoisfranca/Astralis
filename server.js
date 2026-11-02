@@ -68,7 +68,7 @@ function createState(input) {
     campaign,
     modules: { agenda: true, system: true, characters: true, lore: true, npcs: true, handouts: true, maps: true, music: true, diary: true, sessions: true, gmDocs: true, pdfs: true, library: true },
     players: [], appointments: campaign.date ? [{ id: id(6), title: "Sessão 1", date: campaign.date, time: campaign.time, location: campaign.location, notes: "" }] : [],
-    systemGuide: { text: "" }, gmShield: { notes: "" }, lore: { text: "" }, npcs: [], handouts: [], gmDocs: [], pdfs: [],
+    systemGuide: { text: "" }, gmShield: { notes: "", tracker: { chaos: 0, fear: 0, rolls: [] } }, lore: { text: "" }, npcs: [], handouts: [], gmDocs: [], pdfs: [],
     map: { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: 5 },
     music: { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65 },
     notes: { shared: "", private: {} }, journal: [], sessions: []
@@ -80,7 +80,7 @@ function normalizeState(input) {
   return {
     ...base, ...state, campaign: { ...base.campaign, ...campaign }, modules: { ...base.modules, ...(state.modules || {}) },
     players: Array.isArray(state.players) ? state.players : [], appointments: Array.isArray(state.appointments) ? state.appointments : [],
-    systemGuide: state.systemGuide || { text: "" }, gmShield: { ...(base.gmShield || { notes: "" }), ...(state.gmShield || {}) }, lore: state.lore || { text: "" }, npcs: Array.isArray(state.npcs) ? state.npcs : [],
+    systemGuide: state.systemGuide || { text: "" }, gmShield: { ...(base.gmShield || { notes: "" }), ...(state.gmShield || {}), tracker: { ...(base.gmShield?.tracker || { chaos: 0, fear: 0, rolls: [] }), ...(state.gmShield?.tracker || {}) } }, lore: state.lore || { text: "" }, npcs: Array.isArray(state.npcs) ? state.npcs : [],
     handouts: Array.isArray(state.handouts) ? state.handouts : [], gmDocs: Array.isArray(state.gmDocs) ? state.gmDocs : [],
     pdfs: Array.isArray(state.pdfs) ? state.pdfs : [], journal: Array.isArray(state.journal) ? state.journal : [],
     map: { ...base.map, ...(state.map || {}), tokens: Array.isArray(state.map?.tokens) ? state.map.tokens : [], measurements: Array.isArray(state.map?.measurements) ? state.map.measurements : [] },
@@ -129,7 +129,7 @@ async function broadcastRoom(roomId) {
 function requireGM(socket) { if (socket.data.role !== "gm") throw new Error("Essa ação é exclusiva do Mestre."); }
 function moduleKey(value) { return ["agenda", "system", "characters", "lore", "npcs", "handouts", "maps", "music", "diary", "sessions", "gmDocs", "pdfs", "library"].includes(value); }
 function cleanCharacter(input, system) {
-  const stats = input.stats && typeof input.stats === "object" ? Object.fromEntries(Object.entries(input.stats).slice(0, 24).map(([key, value]) => [text(key, 40), text(value, 100)])) : {};
+  const stats = input.stats && typeof input.stats === "object" ? Object.fromEntries(Object.entries(input.stats).slice(0, 160).map(([key, value]) => [text(key, 80), text(value, 2400)])) : {};
   let sheet = null;
   if (input.sheet && typeof input.sheet === "object" && input.sheet.system === system) {
     try { const encoded = JSON.stringify(input.sheet); if (Buffer.byteLength(encoded, "utf8") <= 30000) sheet = JSON.parse(encoded); } catch (_) { sheet = null; }
@@ -151,6 +151,8 @@ function applyAction(room, socket, action) {
     }
     case "module:set": requireGM(socket); if (!moduleKey(payload.key)) throw new Error("Módulo inválido."); state.modules[payload.key] = Boolean(payload.enabled); break;
     case "system:update": requireGM(socket); state.systemGuide.text = text(payload.value, 30000); break; case "gm:shield:update": requireGM(socket); state.gmShield.notes = text(payload.value, 30000); break;
+    case "gm:tracker:update": { requireGM(socket); const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }, key=payload.key==="fear"?"fear":"chaos", limit=key==="fear"?12:999; tracker[key]=Math.min(limit,Math.max(0,Math.trunc(Number(payload.value)||0))); break; }
+    case "dice:record": { const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }; let summary="",system=text(payload.system,40),actor=text(payload.actor,80); if(system!==state.campaign.system) throw new Error("A rolagem não corresponde ao sistema desta mesa."); if(system==="Triangle Agency"){ const dice=Array.isArray(payload.dice)?payload.dice.slice(0,6).map(Number):[]; if(dice.length!==6||dice.some(value=>!Number.isInteger(value)||value<1||value>4)) throw new Error("A rolagem de Triangle Agency precisa ter seis d4."); const threes=dice.filter(value=>value===3).length,triscendence=threes===3,chaos=triscendence?0:6-threes; tracker.chaos=Math.min(999,(Number(tracker.chaos)||0)+chaos); summary=triscendence?"Triscendência · sem Caos":threes+" sucesso(s) · +"+chaos+" Caos"; } else if(system==="Daggerheart"){ const hope=Number(payload.hopeDie),fear=Number(payload.fearDie); if(!Number.isInteger(hope)||!Number.isInteger(fear)||hope<1||hope>12||fear<1||fear>12) throw new Error("Informe os dois resultados de d12."); const critical=hope===fear,withFear=fear>hope; if(!critical&&withFear) tracker.fear=Math.min(12,(Number(tracker.fear)||0)+1); summary=critical?"Crítico":withFear?"Resultado com Medo · +1 Medo":"Resultado com Esperança"; } else throw new Error("Sistema de rolagem não suportado."); tracker.rolls=([{id:id(6),system,actor,summary,createdAt:Date.now()},...(tracker.rolls||[])]).slice(0,30); break; }
     case "lore:update": requireGM(socket); state.lore.text = text(payload.value, 30000); break;
     case "npc:save": {
       requireGM(socket); if (!text(payload.name, 80)) throw new Error("Informe o nome do NPC.");

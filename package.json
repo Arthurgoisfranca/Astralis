@@ -1,10 +1,10 @@
 {
   "name": "astralis",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Gestão de campanhas e lobby de RPG em tempo real",
   "scripts": {
-    "dev": "concurrently -k \"node scripts/startDevServer.js\" \"vite --host 0.0.0.0\"",
+    "dev": "node scripts/dev.js",
     "start": "node server.js",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",

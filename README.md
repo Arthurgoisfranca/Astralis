@@ -7,7 +7,7 @@ Astralis é uma aplicação web para organizar campanhas de RPG, agendar sessõe
 - Cadastro de campanhas com sistema, mestre, jogadores, vagas, agenda, local, classificação indicativa, gatilhos, requisitos e resumo.
 - Calendário de sessões com horário, local e observações.
 - Lobby com convites para jogadores e sincronização em tempo real.
-- Fichas adaptadas ao sistema, diário, anotações e contador de sessões.
+- Fichas adaptadas por sistema, com campos completos, perícias editáveis, controles de recursos, histórico e retratos.
 - Mapas táticos com tokens, zoom, pan e ferramentas de medição.
 - Música compartilhada, NPCs, handouts, documentos do Mestre e biblioteca de PDFs.
 - Upload de imagens e arquivos, com armazenamento local ou Supabase Storage.
@@ -43,6 +43,9 @@ O servidor Node entrega o front-end compilado e também atende a API e as conex�
 │   ├── AstralisApp.jsx
 │   ├── AppShell.jsx
 │   ├── CampaignModules.jsx
+│   ├── CharacterStudio.jsx
+│   ├── characterStudio.css
+│   ├── systemSheetBlueprints.js
 │   ├── SharedTools.jsx
 │   ├── RpgSystems.js
 │   ├── domain/
@@ -64,6 +67,15 @@ Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masqu
 - Convites dão acesso à sala conforme a função de Mestre ou Jogador.
 - A edição de entradas do diário respeita autoria e visibilidade.
 - O OCR de fichas escaneadas é uma sugestão; confira os valores reconhecidos antes de salvar.
+## Versão 1.3
+
+- Fichas visuais específicas para D&D 5e/5.5e, Call of Cthulhu 7ª edição, Vampire V5, Triangle Agency, Daggerheart, Ordem Paranormal Playtest e Sacramento.
+- Campos organizados por identidade, atributos, recursos, perícias, detalhes e rolagens; registros maiores permanecem na ficha em nuvem.
+- Rolagens de 6d4, Dualidade 2d12, dados de Fome, d100, testes do playtest de Ordem, ações de Sacramento e testes d20.
+- Caos de Triangle Agency e Medo de Daggerheart sincronizados com o Escudo do Mestre; consulta rápida retrátil disponível durante a navegação.
+- Controles específicos para recursos, espaços de magia, perícias, círculos, inventário, armas, disciplinas e habilidades com usos.
+- A importação de PDF reconhece campos comuns das fichas D&D, Call of Cthulhu e Vampire; valores identificados são sugestões revisáveis.
+
 ## Versão 1.2
 
 - Modelos TypeScript discriminados por sistema e cálculos adaptativos de modificadores de D&D, dificuldades de Call of Cthulhu, limiares de Daggerheart e dados de Fome de Vampire.
