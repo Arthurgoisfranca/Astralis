@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import AudioCenter from "./AudioCenter.jsx";
 import SystemConsultations from "./SystemConsultations.jsx";
@@ -7,6 +7,13 @@ import { MODULES, Home, Lobby } from "./AppShell.jsx";
 import { sha256Hex } from "./SharedTools.jsx";
 import { Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, Music, NPCs, PDFWorkshop, Sessions, SystemGuide, Characters, Workbench } from "./CampaignModules.jsx";
 
+export const ThemeContext=createContext({theme:'dark',toggleTheme:()=>{}});
+function ThemeProvider({children}){
+ const [theme,setTheme]=useState(()=>{try{return localStorage.getItem('mesa-dados:theme')==='light'?'light':'dark';}catch{return 'dark';}});
+ useEffect(()=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark');document.documentElement.classList.toggle('light',theme==='light');document.documentElement.style.colorScheme=theme;try{localStorage.setItem('mesa-dados:theme',theme);}catch{}},[theme]);
+ return <ThemeContext.Provider value={{theme,toggleTheme:()=>setTheme(v=>v==='dark'?'light':'dark')}}>{children}</ThemeContext.Provider>;
+}
+function ThemeToggle(){const {theme,toggleTheme}=useContext(ThemeContext);return <button type="button" className="global-theme-toggle" onClick={toggleTheme} aria-label={theme==='dark'?'Ativar modo claro':'Ativar modo noturno'} title={theme==='dark'?'Ativar modo claro':'Ativar modo noturno'} aria-pressed={theme==='light'}>{theme==='dark'?'☀':'☾'} <span>{theme==='dark'?'Claro':'Noturno'}</span></button>}
 const ROOM_LIST = "mesa-dados:rooms";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE || location.origin;
@@ -21,17 +28,25 @@ function saveRoom(meta) {
   const rooms = savedRooms().filter(item => item.id !== meta.id);
   sessionStorage.setItem(ROOM_LIST, JSON.stringify([meta, ...rooms].slice(0, 12)));
 }
-function parseInvitation(input) {
-  try { const url = new URL(input); return { roomId: url.searchParams.get("room") || "", inviteToken: url.searchParams.get("invite") || "" }; } catch (_) {}
-  const match = String(input || "").match(/^([a-f0-9]+)(?:&invite=([a-f0-9]+))?$/i);
-  return match ? { roomId: match[1], inviteToken: match[2] || "" } : { roomId: "", inviteToken: "" };
+function compactInvitation(roomId,token){
+ if(!/^[a-f0-9]{10}$/i.test(String(roomId||''))||!/^[a-f0-9]{48}$/i.test(String(token||'')))return '';
+ const raw=String(token).match(/../g).map(part=>String.fromCharCode(parseInt(part,16))).join('');
+ return location.origin+'/join/'+roomId+'.'+btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function parseInvitation(input){
+ const raw=String(input||'').trim();let code=raw;
+ try{const url=new URL(raw,location.origin);if(url.pathname.startsWith('/join/'))code=url.pathname.slice(6);else if(url.searchParams.has('room'))return {roomId:url.searchParams.get('room')||'',inviteToken:url.searchParams.get('invite')||''};}catch{}
+ const match=code.match(/^([a-f0-9]{10})\.([A-Za-z0-9_-]{32})$/i);
+ if(match){try{const bytes=atob(match[2].replace(/-/g,'+').replace(/_/g,'/'));return {roomId:match[1],inviteToken:Array.from(bytes,c=>c.charCodeAt(0).toString(16).padStart(2,'0')).join('')};}catch{}}
+ const legacy=raw.match(/^([a-f0-9]+)(?:&invite=([a-f0-9]+))?$/i);
+ return legacy?{roomId:legacy[1],inviteToken:legacy[2]||''}:{roomId:'',inviteToken:''};
 }
 function savedIdentity(id) { try { return JSON.parse(sessionStorage.getItem("mesa-dados:identity:" + id) || "null"); } catch (_) { return null; } }
 
 export default function AppRoot() {
   const [session, setSession] = useState(null);
   const changeSession = useCallback(next => setSession(next), []);
-  return <AccountPanel session={session} onSession={changeSession}>{({user,client,openProfile}) => <App key={user?.id || 'guest'} user={user} accountClient={client} openProfile={openProfile}/>}</AccountPanel>;
+  return <ThemeProvider><ThemeToggle/><AccountPanel session={session} onSession={changeSession}>{({user,client,openProfile}) => <App key={user?.id || 'guest'} user={user} accountClient={client} openProfile={openProfile}/>}</AccountPanel></ThemeProvider>;
 }
 function App({user, accountClient, openProfile}) {
   const socketRef = useRef(null);
@@ -46,7 +61,7 @@ function App({user, accountClient, openProfile}) {
   const [busy, setBusy] = useState(false);
   const [nicknameEditing, setNicknameEditing] = useState(false);
   const [nickname, setNickname] = useState("");
-  const [inviteId, setInviteId] = useState(() => new URLSearchParams(location.search).has("invite") ? location.href : new URLSearchParams(location.search).get("room") || "");
+  const [inviteId, setInviteId] = useState(() => location.pathname.startsWith("/join/") ? location.href : new URLSearchParams(location.search).has("invite") ? location.href : new URLSearchParams(location.search).get("room") || "");
 
   const enter = useCallback((meta, creds) => {
     socketRef.current?.disconnect();
@@ -210,7 +225,7 @@ function App({user, accountClient, openProfile}) {
 
   const isGM = identity.role === "gm";
   const tabs = [["lobby", "Sala"], ["workbench", "Painel"]].concat(isGM ? [["gmShield", "Escudo do Mestre"]] : []).concat(MODULES.filter(([key]) => key === "gmDocs" ? isGM : isGM || roomState.modules[key]).map(([key, label]) => [key, label]));
-  const inviteUrl = location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
+  const inviteUrl = compactInvitation(activeRoom.id,activeRoom.inviteToken) || location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
   return <div className="app-shell">
     <aside className="rail"><div className="wordmark">M<span>&</span>D</div><div className="rail-campaign"><small>MESA ATUAL</small><strong>{roomState.campaign.title}</strong><span>{roomState.campaign.system || "Sistema a definir"}</span></div>
       <nav className="room-nav">{tabs.map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</nav>

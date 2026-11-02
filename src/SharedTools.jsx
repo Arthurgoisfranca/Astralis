@@ -118,45 +118,33 @@ export function Modal({ title, children, onClose }) {
 }
 
 export function TokenMaker({ initial, onClose, onSave }) {
-  const canvasRef = useRef(null);
-  const [source, setSource] = useState(initial || "");
-  const [color, setColor] = useState("#b77b48");
-  const [zoom, setZoom] = useState(1);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d"), size = 360;
-    canvas.width = size; canvas.height = size; ctx.clearRect(0, 0, size, size);
-    if (!source) return;
-    const image = new Image();
-    image.onload = () => {
-      ctx.save(); ctx.beginPath(); ctx.arc(size / 2, size / 2, size * .44, 0, Math.PI * 2); ctx.clip();
-      const scale = Math.max(size * .88 / image.width, size * .88 / image.height) * zoom;
-      const width = image.width * scale, height = image.height * scale;
-      ctx.drawImage(image, (size - width) / 2, (size - height) / 2, width, height); ctx.restore();
-      ctx.beginPath(); ctx.arc(size / 2, size / 2, size * .46, 0, Math.PI * 2); ctx.strokeStyle = color; ctx.lineWidth = 15; ctx.stroke();
-      ctx.beginPath(); ctx.arc(size / 2, size / 2, size * .49, 0, Math.PI * 2); ctx.strokeStyle = "#efe3ce"; ctx.lineWidth = 3; ctx.stroke();
-    };
-    image.src = source;
-  }, [source, color, zoom]);
-
-  async function choose(file) {
-    if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 30 * 1024 * 1024) return alert("Escolha uma imagem de até 30 MB.");
-    try { setSource(await readImage(file)); } catch (error) { alert(error.message); }
-  }
-  function download() {
-    const link = document.createElement("a"); link.href = canvasRef.current.toDataURL("image/png"); link.download = "token.png"; link.click();
-  }
-  return <Modal title="Token Stamp" onClose={onClose}>
-    <div className="token-maker"><canvas ref={canvasRef} aria-label="Prévia do token"/>
-      <label className="button quiet file-button">Escolher imagem<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => choose(event.target.files[0])}/></label>
-      <label>Zoom<input type="range" min=".7" max="2.2" step=".05" value={zoom} onChange={event => setZoom(Number(event.target.value))}/></label>
-      <label>Cor da moldura<input type="color" value={color} onChange={event => setColor(event.target.value)}/></label>
-      <div className="modal-actions"><button className="button quiet" onClick={download} type="button">Baixar PNG</button><button className="button primary" type="button" onClick={() => onSave(canvasRef.current.toDataURL("image/png"))}>Usar na ficha</button></div>
-    </div>
-  </Modal>;
+  const canvasRef=useRef(null),pointerRef=useRef(null);
+  const [source,setSource]=useState(initial||''),[color,setColor]=useState('#b77b48'),[zoom,setZoom]=useState(1),[offset,setOffset]=useState({x:0,y:0});
+  useEffect(()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    const ctx=canvas.getContext('2d'),size=360;canvas.width=size;canvas.height=size;
+    ctx.clearRect(0,0,size,size);
+    if(!source)return;
+    const image=new Image();let cancelled=false;
+    image.onload=()=>{if(cancelled)return;const scale=Math.max(size*.88/image.naturalWidth,size*.88/image.naturalHeight)*zoom;
+      const w=image.naturalWidth*scale,h=image.naturalHeight*scale;
+      ctx.save();ctx.beginPath();ctx.arc(size/2,size/2,size*.44,0,Math.PI*2);ctx.clip();ctx.drawImage(image,(size-w)/2+offset.x,(size-h)/2+offset.y,w,h);ctx.restore();
+      ctx.beginPath();ctx.arc(size/2,size/2,size*.46,0,Math.PI*2);ctx.strokeStyle=color;ctx.lineWidth=15;ctx.stroke();
+      ctx.beginPath();ctx.arc(size/2,size/2,size*.49,0,Math.PI*2);ctx.strokeStyle='#efe3ce';ctx.lineWidth=3;ctx.stroke();
+    };image.src=source;return()=>{cancelled=true;};
+  },[source,color,zoom,offset]);
+  async function choose(file){if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>30*1024*1024){alert('Use PNG, JPG ou WebP de até 30 MB.');return;}try{const data=await readImage(file);setSource(data);setZoom(1);setOffset({x:0,y:0});}catch(e){alert(e.message);}}
+  function down(event){if(!source)return;event.preventDefault();pointerRef.current={id:event.pointerId,x:event.clientX,y:event.clientY,start:{...offset}};event.currentTarget.setPointerCapture(event.pointerId);}
+  function move(event){const start=pointerRef.current;if(!start||start.id!==event.pointerId)return;const factor=360/Math.max(1,event.currentTarget.getBoundingClientRect().width);setOffset({x:start.start.x+(event.clientX-start.x)*factor,y:start.start.y+(event.clientY-start.y)*factor});}
+  function up(event){if(pointerRef.current?.id===event.pointerId)pointerRef.current=null;}
+  function download(){const link=document.createElement('a');link.href=canvasRef.current.toDataURL('image/png');link.download='token.png';link.click();}
+  return <Modal title="Editar retrato e token" onClose={onClose}><div className="token-maker token-editor">
+    <canvas ref={canvasRef} aria-label="Prévia circular do token: arraste para ajustar" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}/>
+    <p className="token-help">Arraste a imagem para enquadrar o rosto e ajuste o zoom antes de salvar.</p>
+    <label className="button quiet file-button">Escolher imagem<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>choose(e.target.files[0])}/></label>
+    <label>Zoom: {Math.round(zoom*100)}%<input type="range" min="1" max="3" step=".05" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/></label>
+    <label>Cor da moldura<input type="color" value={color} onChange={e=>setColor(e.target.value)}/></label>
+    <button type="button" className="button quiet" onClick={()=>{setOffset({x:0,y:0});setZoom(1);}}>Centralizar</button>
+    <div className="modal-actions"><button className="button quiet" onClick={download} type="button" disabled={!source}>Baixar PNG</button><button className="button primary" type="button" disabled={!source} onClick={()=>onSave(canvasRef.current.toDataURL('image/png'))}>Salvar enquadramento</button></div>
+  </div></Modal>;
 }
-
-
