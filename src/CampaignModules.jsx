@@ -7,7 +7,6 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { SYSTEMS, systemProfile } from "./RpgSystems.js";
 import { buildCharacterSheet } from "./domain/characterSheets.ts";
 import { CharacterStudio } from "./CharacterStudio.jsx";
-import PanelErrorBoundary from "./PanelErrorBoundary.jsx";
 
 let pdfToolsPromise; async function loadPdfTools() { if (!pdfToolsPromise) pdfToolsPromise = Promise.all([import("pdf-lib"), import("pdfjs-dist")]).then(([pdfLib, pdfjsLib]) => { pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl; return { PDFDocument: pdfLib.PDFDocument, pdfjsLib }; }); return pdfToolsPromise; }
 
@@ -140,7 +139,7 @@ export function Maps({ value, room, identity, isGM, send, upload }) {
   const [gridFeet, setGridFeet] = useState(value.gridFeet || 5), [busy, setBusy] = useState(false);
   const stageRef = useRef(null);
   useEffect(() => { if (!image) return; const bitmap = new Image(); bitmap.onload=()=>setMapAspect(bitmap.naturalWidth / Math.max(1, bitmap.naturalHeight)); bitmap.src=image; },[image]);
-  useEffect(() => { if (!image || !stageRef.current) return; const observer = new ResizeObserver(entries => { const rect = entries[0]?.contentRect; if(rect)setStageSize({width:rect.width,height:rect.height}); }); observer.observe(stageRef.current); return () => observer.disconnect(); },[image]);
+  useEffect(() => { if (!image || !stageRef.current) return; if (typeof ResizeObserver === "undefined") return; const observer = new ResizeObserver(entries => { const rect = entries[0]?.contentRect; if(rect)setStageSize({width:rect.width,height:rect.height}); }); observer.observe(stageRef.current); return () => observer.disconnect(); },[image]);
   const fitted = (() => {const ratio = mapAspect || 16/9, width=Math.min(stageSize.width,stageSize.height*ratio),height=width/ratio;return {width,height};})();
   useEffect(() => { setName(value.name || ""); setImage(value.image || ""); setGridFeet(value.gridFeet || 5); }, [value.name, value.image, value.gridFeet]);
   const candidates = [
@@ -275,7 +274,7 @@ export function Diary({ value, journal = [], isGM, identity, send }) {
   return <div className="view-stack"><ModuleHeader eyebrow="REGISTROS" title="Diário de bordo" description="Entradas públicas para a mesa e notas privadas entre cada jogador e o Mestre."/>
     {isGM && <section className="surface writing-surface"><div className="section-eyebrow">CADERNO DO MESTRE</div><label className="writing-field">Notas privadas do Mestre<textarea value={privateText} onChange={event => setPrivateText(event.target.value)} placeholder="Somente o Mestre pode ler estas notas"/></label><label className="writing-field">Resumo compartilhado<textarea value={shared} onChange={event => setShared(event.target.value)} placeholder="Resumo geral da campanha visível para o grupo."/></label><button className="button secondary" onClick={() => send("notes:save", { shared, private: privateText })}>Salvar caderno</button></section>}
     <form className="surface journal-form" onSubmit={saveEntry}><div className="section-eyebrow">{entry.id ? "EDITAR ENTRADA" : "NOVA ENTRADA"}</div><input required maxLength="120" placeholder="Título" value={entry.title} onChange={event => setEntry(old => ({ ...old, title: event.target.value }))}/><textarea required value={entry.body} onChange={event => setEntry(old => ({ ...old, body: event.target.value }))} placeholder="Anote uma pista, acontecimento ou lembrança da sessão."/><div className="journal-controls"><label>Visibilidade<select value={entry.visibility} onChange={event => setEntry(old => ({ ...old, visibility: event.target.value }))}><option value="public">Público para a mesa</option><option value="private">Privado para mim e o Mestre</option></select></label><button className="button secondary">{entry.id ? "Salvar edição" : "Publicar no diário"}</button>{entry.id && <button type="button" className="button quiet" onClick={() => setEntry(empty)}>Cancelar</button>}</div></form>
-    <div className="journal-list">{[...journal].sort((a,b)=>new Date(b.createdAt || b.created_at || 0).getTime()-new Date(a.createdAt || a.created_at || 0).getTime()).map(item => <article className="surface journal-entry" key={item.id}><header><div><div className="section-eyebrow">{item.authorName} · {(item.is_private ?? (item.visibility === "private")) ? "PRIVADO" : "PÚBLICO"}</div><h2>{item.title}</h2></div><time>{new Date(item.updatedAt || item.updated_at || item.createdAt || item.created_at || Date.now()).toLocaleDateString("pt-BR")}</time></header><p>{item.body}</p>{(isGM || item.authorId === identity.userId) && <div className="card-actions"><button className="text-action" onClick={() => setEntry({ id: item.id, title: item.title, body: item.body, visibility: item.visibility })}>Editar</button><button className="text-action danger" onClick={() => send("journal:delete", { id: item.id })}>Excluir</button></div>}</article>)}</div>
+    <div className="journal-list">{[...journal].sort((a,b)=>(b.createdAt || b.created_at || 0)-(a.createdAt || a.created_at || 0)).map(item => <article className="surface journal-entry" key={item.id}><header><div><div className="section-eyebrow">{item.authorName} · {(item.is_private ?? (item.visibility === "private")) ? "PRIVADO" : "PÚBLICO"}</div><h2>{item.title}</h2></div><time>{new Date(item.updatedAt).toLocaleDateString("pt-BR")}</time></header><p>{item.body}</p>{(isGM || item.authorId === identity.userId) && <div className="card-actions"><button className="text-action" onClick={() => setEntry({ id: item.id, title: item.title, body: item.body, visibility: item.visibility })}>Editar</button><button className="text-action danger" onClick={() => send("journal:delete", { id: item.id })}>Excluir</button></div>}</article>)}</div>
     {!journal.length && <Empty>O diário ainda não tem entradas.</Empty>}
     <div className="diary-private-grid">{!isGM && <section className="surface writing-surface"><div className="section-eyebrow">NOTAS PRIVADAS</div><textarea value={privateText} onChange={event => setPrivateText(event.target.value)} placeholder="Lembretes visíveis apenas para você e o Mestre."/><button className="button quiet" onClick={() => send("notes:save", { private: privateText })}>Salvar notas privadas</button></section>}
       {!isGM && <section className="surface writing-surface"><div className="section-eyebrow">CADERNO DO MESTRE</div><div className="lore-read">{value.shared || "O Mestre ainda não adicionou um resumo."}</div></section>}</div>
@@ -301,7 +300,7 @@ export function Characters({ room, identity, system, isGM, send, upload }) {
       return <article className="surface character-card" key={player.id}>{player.character?.token && <img className="character-token" src={player.character.token} alt={"Token de " + player.character.name}/>}<div className="character-body"><div className="section-eyebrow">{player.name}</div><h2>{player.character?.name || "Ficha não criada"}</h2><p>{player.character ? [player.character.classLevel, ...primary, player.character.hp ? "PV " + player.character.hp : "", player.character.ac ? "CA " + player.character.ac : ""].filter(Boolean).join(" · ") : "A ficha ainda está vazia."}</p><button className="button secondary" onClick={() => setEditing(player)}>{player.character ? "Editar ficha" : "Criar ficha"}</button></div></article>;
     })}</div>
     {!targets.length && <Empty>Entre na sala como jogador para criar sua ficha.</Empty>}
-    {editing && <PanelErrorBoundary key={editing.id} onClose={() => setEditing(null)}><CharacterStudio key={editing.id} player={editing} profile={profile} system={system} upload={upload} send={send} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/></PanelErrorBoundary>}
+    {editing && <CharacterStudio key={editing.id} player={editing} profile={profile} system={system} upload={upload} send={send} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/>}
   </div>;
 }
 function ShieldReferencePanel({ section }) {
@@ -418,23 +417,17 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
   }
   useEffect(() => () => { if (viewerUrl.startsWith("blob:")) URL.revokeObjectURL(viewerUrl); }, [viewerUrl]);
   async function parsePdf(file, meta = null) { const { PDFDocument, pdfjsLib } = await loadPdfTools();
-    const bytes = await file.arrayBuffer(), pdfDocument = await PDFDocument.load(bytes, { ignoreEncryption: false }), form = pdfDocument.getForm();
+    const bytes = await file.arrayBuffer(), document = await PDFDocument.load(bytes), form = document.getForm();
     const found = form.getFields().map(field => ({ name: field.getName(), type: field.constructor.name, value: fieldValue(field) }));
     setBuffer(bytes); setFields(found); setValues(Object.fromEntries(found.map(field => [field.name, field.value]))); setTextContent("");
     const objectUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
     setViewerUrl(objectUrl);
     const task = pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }), pdf = await task.promise;
     let text = "";
-    const pageLimit = Math.min(pdf.numPages, 6);
-    try {
-      for (let pageNo = 1; pageNo <= pageLimit; pageNo++) {
-        setProgress(`Extraindo texto · página ${pageNo} de ${pageLimit}`);
-        const page = await pdf.getPage(pageNo), content = await page.getTextContent();
-        text += content.items.map(item => item.str || "").join(" ") + "\n";
-        page.cleanup();
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
-    } finally { await task.destroy(); }
+    for (let pageNo = 1; pageNo <= Math.min(pdf.numPages, 10); pageNo++) {
+      const page = await pdf.getPage(pageNo), content = await page.getTextContent();
+      text += content.items.map(item => item.str || "").join(" ") + "\n";
+    }
     setTextContent(text);
     const fromText = parseSuggestions(text, profile), fromForms = pdfFormSuggestions(found,system);
     const parsed = { ...fromText, ...fromForms }; setSuggestions(parsed); await saveSuggestedStats(parsed, meta || active, meta?.ownerId || ownerId);
@@ -500,7 +493,7 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
   return <div className="view-stack" onDragOver={event=>{if(Array.from(event.dataTransfer?.types||[]).includes("Files"))event.preventDefault();}} onDrop={event=>{const pdf=Array.from(event.dataTransfer.files||[]).find(file=>file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"));if(pdf){event.preventDefault();chooseFile(pdf);}}}><ModuleHeader eyebrow="FICHAS E FORMULÁRIOS" title="PDF da ficha" description={system || "Selecione o sistema da campanha para sugerir os campos."}/><div className="pdf-drop-zone" role="note">📄 Arraste e solte aqui um PDF da ficha para enviar e extrair texto automaticamente (limite 30 MB)</div>
     <section className="surface pdf-toolbar">{isGM && <label>Personagem<select value={ownerId} onChange={event => setOwnerId(event.target.value)}><option value="">Escolha o jogador</option>{room.players.map(player => <option value={player.id} key={player.id}>{player.name}</option>)}</select></label>}<label className="button quiet file-button">{busy ? "Processando…" : "Enviar PDF"}<input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={event => chooseFile(event.target.files[0])}/></label><span>{progress || "Campos AcroForm, texto e OCR"}</span></section>
     {!!available.length && <section className="surface saved-pdfs"><div className="section-eyebrow">FICHAS GUARDADAS</div>{available.map(item => <button key={item.id} className="recent-room" onClick={() => openSaved(item)}><span><b>{item.title}</b><small>{room.players.find(player => player.id === item.ownerId)?.name || "Minha ficha"}</small></span><i>Abrir PDF</i></button>)}</section>}
-    {viewerUrl && <div className="pdf-workbench"><iframe loading="lazy" className="pdf-viewer" src={viewerUrl} title="Visualizador da ficha PDF"/><section className="surface pdf-fields"><div className="section-eyebrow">CAMPOS EDITÁVEIS · {fields.length}</div>{fields.length ? fields.map(field => <AcroField key={field.name} field={field} value={values[field.name]} onChange={next => setValues(old => ({ ...old, [field.name]: next }))}/>) : <p className="muted-copy">Nenhum campo AcroForm. Use o OCR se a ficha for uma imagem digitalizada.</p>}
+    {viewerUrl && <div className="pdf-workbench"><iframe className="pdf-viewer" src={viewerUrl} title="Visualizador da ficha PDF"/><section className="surface pdf-fields"><div className="section-eyebrow">CAMPOS EDITÁVEIS · {fields.length}</div>{fields.length ? fields.map(field => <AcroField key={field.name} field={field} value={values[field.name]} onChange={next => setValues(old => ({ ...old, [field.name]: next }))}/>) : <p className="muted-copy">Nenhum campo AcroForm. Use o OCR se a ficha for uma imagem digitalizada.</p>}
       {!!Object.keys(suggestions).length && <div className="suggested-stats"><div className="section-eyebrow">DADOS SUGERIDOS PARA A FICHA</div>{Object.entries(suggestions).map(([key, value]) => <label key={key}>{profile.fields.find(field => field[0] === key)?.[1] || key}<input value={value} onChange={event => setSuggestions(old => ({ ...old, [key]: event.target.value }))}/></label>)}<button className="button secondary" onClick={applyToCharacter}>Aplicar à ficha digital</button></div>}
       <div className="card-actions"><button className="button quiet" disabled={busy || !buffer} onClick={scanOcr}>Escanear com OCR</button><button className="button secondary" disabled={!buffer} onClick={downloadFilled}>Exportar PDF preenchido</button></div></section></div>}
     {textContent && <details className="pdf-text"><summary>Texto reconhecido para consulta</summary><pre>{textContent}</pre></details>}
@@ -509,8 +502,7 @@ export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, 
 }
 
 export function CommunityLibrary({ room, identity, items: initialItems = [], upload }) {
-  const [items, setItems] = useState(initialItems), [title, setTitle] = useState(""), [system, setSystem] = useState(room.campaign.system || ""), [file, setFile] = useState(null), [search, setSearch] = useState(""), [busy, setBusy] = useState(false), [page,setPage]=useState(1);
-  const pageSize=12;
+  const [items, setItems] = useState(initialItems), [title, setTitle] = useState(""), [system, setSystem] = useState(room.campaign.system || ""), [file, setFile] = useState(null), [search, setSearch] = useState(""), [busy, setBusy] = useState(false);
   async function refresh() { const response = await fetch((import.meta.env.VITE_API_URL || "").replace(/\/$/, "") + "/api/library"); const result = await response.json(); setItems(result.items || []); }
   useEffect(() => { refresh().catch(() => {}); }, []);
   async function submit(event) {
@@ -526,13 +518,10 @@ export function CommunityLibrary({ room, identity, items: initialItems = [], upl
     finally { setBusy(false); }
   }
   const visible = items.filter(item => (item.title + " " + item.system + " " + item.fileName).toLowerCase().includes(search.toLowerCase()));
-  const totalPages=Math.max(1,Math.ceil(visible.length/pageSize));
-  const shown=visible.slice((Math.min(page,totalPages)-1)*pageSize,Math.min(page,totalPages)*pageSize);
   return <div className="view-stack"><ModuleHeader eyebrow="BIBLIOTECA DA COMUNIDADE" title="PDFs de referência" description="Consulte e compartilhe materiais de sistemas durante a sessão."/>
     <form className="surface library-form" onSubmit={submit}><label>Título<input value={title} onChange={event => setTitle(event.target.value)} placeholder="Livro ou referência"/></label><label>Sistema<select value={system} onChange={event => setSystem(event.target.value)}><option value="">Sistema geral</option>{SYSTEMS.map(value => <option key={value}>{value}</option>)}</select></label><label className="button quiet file-button">Escolher PDF<input type="file" accept="application/pdf,.pdf" onChange={event => setFile(event.target.files[0] || null)}/></label><span className="muted-copy">{file?.name || "PDF · até 30 MB"}</span><button className="button secondary" disabled={busy}>{busy ? "Enviando…" : "Publicar na biblioteca"}</button></form>
-    <input className="library-search" aria-label="Buscar na biblioteca" placeholder="Buscar por título, sistema ou arquivo" value={search} onChange={event => {setSearch(event.target.value);setPage(1);}}/>
-    <div className="document-list">{shown.map(item => <article className="surface document-row" key={item.id}><div><b>{item.title}</b><small>{item.system || "Geral"} · {item.uploader}</small></div><button className="button quiet" onClick={async () => { const base = (import.meta.env.VITE_API_URL || "").replace(/\/$/, ""), url = item.url?.startsWith("/") ? base + item.url : item.url; window.open(url, "_blank", "noopener,noreferrer"); }}>Abrir PDF</button></article>)}</div>
-    {visible.length>pageSize&&<nav className="library-pages" aria-label="Páginas da biblioteca"><button className="button quiet" type="button" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>Anterior</button><span>Página {Math.min(page,totalPages)} de {totalPages} · {visible.length} PDFs</span><button className="button quiet" type="button" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Próxima</button></nav>}
+    <input className="library-search" aria-label="Buscar na biblioteca" placeholder="Buscar por título, sistema ou arquivo" value={search} onChange={event => setSearch(event.target.value)}/>
+    <div className="document-list">{visible.map(item => <article className="surface document-row" key={item.id}><div><b>{item.title}</b><small>{item.system || "Geral"} · {item.uploader}</small></div><button className="button quiet" onClick={async () => { const base = (import.meta.env.VITE_API_URL || "").replace(/\/$/, ""), url = item.url?.startsWith("/") ? base + item.url : item.url; window.open(url, "_blank", "noopener,noreferrer"); }}>Abrir PDF</button></article>)}</div>
     {!visible.length && <Empty>A biblioteca ainda não tem arquivos.</Empty>}
   </div>;
 }

@@ -1,6 +1,6 @@
 {
   "name": "astralis",
-  "version": "1.5.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Gestão de campanhas e lobby de RPG em tempo real",
   "scripts": {
@@ -8,7 +8,7 @@
     "start": "node server.js",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "migrate:cloud": "node --env-file=.env scripts/migrateSupabasedata.js",
+    "migrate:cloud": "node --env-file=.env scripts/migrateSupabaseData.js",
     "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {

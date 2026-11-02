@@ -566,3 +566,4 @@ if (supabase) {
 }
 server.listen(port, "0.0.0.0", () => console.log("Mesa & Dados disponível na porta " + port + (cloud ? " (Supabase)" : " (modo local)")));
 
+

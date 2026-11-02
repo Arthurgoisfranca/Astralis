@@ -1,33 +1,16 @@
-{
-  "name": "astralis",
-  "version": "1.5.0",
-  "private": true,
-  "description": "Gestão de campanhas e lobby de RPG em tempo real",
-  "scripts": {
-    "dev": "node scripts/dev.js",
-    "start": "node server.js",
-    "build": "vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "migrate:cloud": "node --env-file=.env scripts/migrateSupabaseData.js",
-    "test": "node --test tests/*.test.cjs"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
-    "better-sqlite3": "^12.4.1",
-    "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.4.299",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
-    "tesseract.js": "^7.0.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
-    "concurrently": "^9.2.1",
-    "typescript": "^7.0.2",
-    "vite": "^7.1.7"
-  }
-}
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#191a1f" />
+    <meta name="description" content="Lobby de campanhas, fichas e ferramentas para RPG de mesa." />
+    <title>Mesa & Dados · 1.4v</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

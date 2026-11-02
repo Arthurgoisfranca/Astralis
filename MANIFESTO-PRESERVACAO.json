@@ -1,0 +1,102 @@
+{
+  "base": "Mesa & Dados v1.4v",
+  "strategy": "v1.4 baseline with limited UI fixes from v1.5",
+  "modified_existing_files": [
+    "src/AudioCenter.jsx",
+    "src/CampaignModules.jsx",
+    "src/astralisTheme.css"
+  ],
+  "protected_unchanged": [
+    {
+      "file": "server.js",
+      "sha256": "942ab7ceaa75c1b8533bc05d26b192c40cdbdcd73ff8fd8e01f040331111373c"
+    },
+    {
+      "file": "src/AccountPanel.jsx",
+      "sha256": "f772c7ca22e33a02d4ec6bdadd94290039494062df8ad1b3c60462d74e524b21"
+    },
+    {
+      "file": "src/AstralisApp.jsx",
+      "sha256": "5bc6d6850f14d56ad1f7d2e4a9a787444b87010c9edbb53f2f6de383a0f63d9d"
+    },
+    {
+      "file": "src/AppShell.jsx",
+      "sha256": "79035f46e013d236dd3885130644a884fe15483fe4527eb0ce5d00c1de74dc49"
+    },
+    {
+      "file": "src/CharacterStudio.jsx",
+      "sha256": "83e754f4e9f8599a66a442ee27fa9d7f861462fceda56400615bc1627ede975f"
+    },
+    {
+      "file": "src/domain/characterSheets.ts",
+      "sha256": "3e86024008af5bd56909455e7f4f3c1f036b401d23d499fc47df41d336dae2a6"
+    },
+    {
+      "file": "src/domain/sheetCalculations.ts",
+      "sha256": "6dd2a0094425ce34d21741176614fe3d867dccea799b3a51d01a94814c2daf06"
+    },
+    {
+      "file": "supabase/migrations/20261031_init.sql",
+      "sha256": "35b38c856606c331b16ecdedaca3acb2bfc7f0d3435488b5406018c9cfbdd0df"
+    },
+    {
+      "file": "supabase/migrations/20261101_v12_realtime_storage_security.sql",
+      "sha256": "6c9301eee12952a57a0ab33856de3c3fdc3772a669ba2986e383f67186f5c5e0"
+    },
+    {
+      "file": "supabase/migrations/20261102_v14_accounts_audio_maps.sql",
+      "sha256": "72956475b5a0f873646304f2119ed2f0b4c584644870f65860beea65848a76af"
+    },
+    {
+      "file": "index.html",
+      "sha256": "a8ff50f5bf202740de6869c951f34a4221a492d4e3f49b15305c1f4ec8f8aeea"
+    },
+    {
+      "file": "package.json",
+      "sha256": "c135d5ec0f0b3faed503954ea6ad19419d3cef8d1fbd44220ed21a73444d8758"
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "5a89ad0e460fed23239a1d1dfaf3872c8c61ef9c02e27938c1de0788bfabe3ad"
+    },
+    {
+      "file": "render.yaml",
+      "sha256": "43595c55e826999c1b4bed255dddb49858e40bf907c4330be62b7f0370e7f2ee"
+    },
+    {
+      "file": "vite.config.js",
+      "sha256": "c131115dacf89165c769d3b1ebe2fdaa95a5acf11b66a89ed5bbd4e06fe4a40e"
+    },
+    {
+      "file": "tsconfig.json",
+      "sha256": "46e1099991b6f1bc28d2074c7885869be1c13d3676398609d0499b8bde4567ff"
+    },
+    {
+      "file": "vercel.json",
+      "sha256": "1b4bfd53b1bdc0d0e0171c1404b2f369c17cb5e40d08fe125e1311a1ebe8d911"
+    },
+    {
+      "file": "netlify.toml",
+      "sha256": "c8590114a93eab6fd156d5f3eca7e291dcc1f5f48238e1bb543addd6db2af211"
+    },
+    {
+      "file": "public/manifest.json",
+      "sha256": "0294233aef74c132f2f58fc173690acc1d9829cd005edb9348882331b443e88f"
+    },
+    {
+      "file": "public/sw.js",
+      "sha256": "90deb48ffd01268fcde82a9f95b6401ad9b8c4845bde07909cff18946f34fe84"
+    },
+    {
+      "file": ".gitignore",
+      "sha256": "5f3fca3fe66e0c4ec534f8bd5d1e7552694a96791414a3685a10971a310ea6c6"
+    },
+    {
+      "file": ".env.example",
+      "sha256": "feca8c9aa782f7d3a097ca3e8033e81a800267dcd091fec4c82cfd79130a4c43"
+    }
+  ],
+  "no_env_file_created": true,
+  "remote_repo_modified": false,
+  "tests": "10/10 local test cases passed; tsc --noEmit and node --check server.js passed; Vite full build not validated"
+}

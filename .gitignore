@@ -1,23 +1,5 @@
-# Dependências e artefatos gerados
 node_modules/
 dist/
-build/
-coverage/
-*.log
-npm-debug.log*
-
-# Segredos locais (NUNCA publicar)
+data/
 .env
 .env.*
-!.env.example
-!.env.sample
-
-# Arquivos temporários e locais
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-*.sqlite
-*.sqlite3
-*.db
-.data/
