@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export const makeId = () => crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
 const SHA256_ROUND = new Uint32Array([
@@ -107,56 +108,85 @@ export function ImageDrop({ value, onChange, upload, kind = "image", label = "Ar
   </label>;
 }
 export function Modal({ title, children, onClose }) {
+  const modalRef=useRef(null);
   useEffect(() => {
-    const fn = event => { if (event.key === "Escape") onClose(); };
+    const fn = event => { if (event.key === "Escape" && Array.from(document.querySelectorAll(".modal-scrim")).at(-1) === modalRef.current) onClose(); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
-  return <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="modal-card"><header><h2>{title}</h2><button type="button" className="close-button" onClick={onClose}>Fechar</button></header>{children}</section>
-  </div>;
+  return createPortal(<div ref={modalRef} className="modal-scrim" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <section role="dialog" aria-modal="true" aria-label={title} className="modal-card"><header><h2>{title}</h2><button type="button" className="close-button" onClick={onClose}>Fechar</button></header>{children}</section>
+  </div>, document.body);
 }
 
-export function TokenMaker({ initial, onClose, onSave }) {
+export function TokenMaker({ initial, onClose, onSave, mode = "token" }) {
   const canvasRef = useRef(null);
+  const pointer = useRef(null);
   const [source, setSource] = useState(initial || "");
-  const [color, setColor] = useState("#b77b48");
+  const [color, setColor] = useState("#c69968");
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({x:0,y:0});
+  const [ready,setReady] = useState(false);
+  const [error,setError] = useState("");
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d"), size = 360;
-    canvas.width = size; canvas.height = size; ctx.clearRect(0, 0, size, size);
-    if (!source) return;
-    const image = new Image();
-    image.onload = () => {
-      ctx.save(); ctx.beginPath(); ctx.arc(size / 2, size / 2, size * .44, 0, Math.PI * 2); ctx.clip();
-      const scale = Math.max(size * .88 / image.width, size * .88 / image.height) * zoom;
-      const width = image.width * scale, height = image.height * scale;
-      ctx.drawImage(image, (size - width) / 2, (size - height) / 2, width, height); ctx.restore();
-      ctx.beginPath(); ctx.arc(size / 2, size / 2, size * .46, 0, Math.PI * 2); ctx.strokeStyle = color; ctx.lineWidth = 15; ctx.stroke();
-      ctx.beginPath(); ctx.arc(size / 2, size / 2, size * .49, 0, Math.PI * 2); ctx.strokeStyle = "#efe3ce"; ctx.lineWidth = 3; ctx.stroke();
-    };
-    image.src = source;
-  }, [source, color, zoom]);
+  const loadedImage=useRef(null);
+  useEffect(()=>{
+    loadedImage.current=null;
+    setReady(false);
+    if(!source)return;
+    let active=true;
+    const image=new Image();image.crossOrigin="anonymous";
+    image.onload=()=>{if(active){loadedImage.current=image;setReady(true);setError("");}};
+    image.onerror=()=>{if(active)setError("Não foi possível abrir essa imagem. Escolha um arquivo local.");};
+    image.src=source;
+    return ()=>{active=false;};
+  },[source]);
+  useEffect(()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    const size=480;canvas.width=size;canvas.height=size;
+    const ctx=canvas.getContext("2d");ctx.clearRect(0,0,size,size);
+    const image=loadedImage.current;if(!ready||!image)return;
+    const base=size/Math.min(image.naturalWidth,image.naturalHeight);
+    const width=image.naturalWidth*base*zoom,height=image.naturalHeight*base*zoom;
+    const radius=size*(mode==="avatar"?.49:.44);
+    const maxX=Math.max(0,(width-2*radius)/2),maxY=Math.max(0,(height-2*radius)/2);
+    const x=Math.max(-maxX,Math.min(maxX,pan.x)),y=Math.max(-maxY,Math.min(maxY,pan.y));
+    ctx.save();ctx.beginPath();ctx.arc(size/2,size/2,radius,0,2*Math.PI);ctx.clip();
+    ctx.drawImage(image,(size-width)/2+x,(size-height)/2+y,width,height);ctx.restore();
+    if(mode!=="avatar"){
+      ctx.beginPath();ctx.arc(size/2,size/2,size*.46,0,2*Math.PI);ctx.strokeStyle=color;ctx.lineWidth=15;ctx.stroke();
+      ctx.beginPath();ctx.arc(size/2,size/2,size*.49,0,2*Math.PI);ctx.strokeStyle="#efddc0";ctx.lineWidth=4;ctx.stroke();
+    }
+  },[source,ready,color,zoom,pan.x,pan.y,mode]);
 
-  async function choose(file) {
-    if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 30 * 1024 * 1024) return alert("Escolha uma imagem de até 30 MB.");
-    try { setSource(await readImage(file)); } catch (error) { alert(error.message); }
+  async function choose(file){
+    if(!file)return;
+    try {const prepared=await resizeImage(file,2048);setSource(await readImage(prepared));setPan({x:0,y:0});setZoom(1);}
+    catch(error){setError(error.message||"Falha ao carregar imagem.");}
   }
-  function download() {
-    const link = document.createElement("a"); link.href = canvasRef.current.toDataURL("image/png"); link.download = "token.png"; link.click();
+  function pointerDown(event){pointer.current={x:event.clientX,y:event.clientY,pan};event.currentTarget.setPointerCapture(event.pointerId);}
+  function pointerMove(event){if(!pointer.current)return;const rect=event.currentTarget.getBoundingClientRect(),ratio=480/Math.max(1,rect.width);setPan({x:pointer.current.pan.x+(event.clientX-pointer.current.x)*ratio,y:pointer.current.pan.y+(event.clientY-pointer.current.y)*ratio});}
+  const release=()=>{pointer.current=null;};
+  function output(){
+    if(!ready||!canvasRef.current)return;
+    try{onSave(canvasRef.current.toDataURL("image/png"));}
+    catch(error){setError("A imagem não permite edição por CORS. Envie uma cópia local da foto.");}
   }
-  return <Modal title="Token Stamp" onClose={onClose}>
-    <div className="token-maker"><canvas ref={canvasRef} aria-label="Prévia do token"/>
-      <label className="button quiet file-button">Escolher imagem<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => choose(event.target.files[0])}/></label>
-      <label>Zoom<input type="range" min=".7" max="2.2" step=".05" value={zoom} onChange={event => setZoom(Number(event.target.value))}/></label>
-      <label>Cor da moldura<input type="color" value={color} onChange={event => setColor(event.target.value)}/></label>
-      <div className="modal-actions"><button className="button quiet" onClick={download} type="button">Baixar PNG</button><button className="button primary" type="button" onClick={() => onSave(canvasRef.current.toDataURL("image/png"))}>Usar na ficha</button></div>
+  function download(){
+    if(!ready)return;
+    try{const link=document.createElement("a");link.href=canvasRef.current.toDataURL("image/png");link.download=mode==="avatar"?"avatar.png":"token.png";link.click();}
+    catch(_){setError("Imagem externa bloqueada; envie o arquivo novamente.");}
+  }
+  return <Modal title={mode==="avatar"?"Editar foto de perfil":"Editar retrato do token"} onClose={onClose}>
+    <div className="token-maker avatar-editor">
+      <p className="crop-instructions">Arraste a imagem para reposicionar o rosto. Use o zoom para ajustar o enquadramento.</p>
+      <canvas ref={canvasRef} aria-label="Prévia do corte" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={release} onPointerCancel={release}/>
+      <label className="button quiet file-button">Escolher imagem<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event=>choose(event.target.files[0])}/></label>
+      <label>Zoom <input type="range" min="1" max="3" step=".05" value={zoom} onChange={event=>setZoom(Number(event.target.value))}/><span>{Math.round(zoom*100)}%</span></label>
+      {mode!=="avatar"&&<label>Cor da moldura <input type="color" value={color} onChange={event=>setColor(event.target.value)}/></label>}
+      <button className="button quiet" type="button" onClick={()=>{setPan({x:0,y:0});setZoom(1);}}>Centralizar novamente</button>
+      {error&&<p role="alert" className="inline-error">{error}</p>}
+      <div className="modal-actions"><button type="button" className="button quiet" disabled={!ready} onClick={download}>Baixar PNG</button><button type="button" className="button primary" disabled={!ready} onClick={output}>Salvar enquadramento</button></div>
     </div>
   </Modal>;
 }
-
-

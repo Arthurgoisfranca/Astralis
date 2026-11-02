@@ -22,9 +22,13 @@ function saveRoom(meta) {
   sessionStorage.setItem(ROOM_LIST, JSON.stringify([meta, ...rooms].slice(0, 12)));
 }
 function parseInvitation(input) {
-  try { const url = new URL(input); return { roomId: url.searchParams.get("room") || "", inviteToken: url.searchParams.get("invite") || "" }; } catch (_) {}
-  const match = String(input || "").match(/^([a-f0-9]+)(?:&invite=([a-f0-9]+))?$/i);
-  return match ? { roomId: match[1], inviteToken: match[2] || "" } : { roomId: "", inviteToken: "" };
+  const raw=String(input||"").trim();
+  let candidate=raw;
+  try {const url=new URL(raw);candidate=url.pathname;const direct=url.searchParams.get("room");if(direct)return {roomId:direct,inviteToken:url.searchParams.get("invite")||""};}catch(_){}
+  const short=candidate.match(/(?:^|\/)join\/([a-f0-9]{10})-([a-zA-Z0-9_-]{12})\/?$/);
+  if(short)return {roomId:short[1],inviteToken:short[2]};
+  const legacy=raw.match(/^([a-f0-9]+)(?:&invite=([a-f0-9]+))?$/i);
+  return legacy?{roomId:legacy[1],inviteToken:legacy[2]||""}:{roomId:"",inviteToken:""};
 }
 function savedIdentity(id) { try { return JSON.parse(sessionStorage.getItem("mesa-dados:identity:" + id) || "null"); } catch (_) { return null; } }
 
@@ -46,7 +50,7 @@ function App({user, accountClient, openProfile}) {
   const [busy, setBusy] = useState(false);
   const [nicknameEditing, setNicknameEditing] = useState(false);
   const [nickname, setNickname] = useState("");
-  const [inviteId, setInviteId] = useState(() => new URLSearchParams(location.search).has("invite") ? location.href : new URLSearchParams(location.search).get("room") || "");
+  const [inviteId, setInviteId] = useState(() => location.pathname.startsWith("/join/") ? location.href : new URLSearchParams(location.search).has("invite") ? location.href : new URLSearchParams(location.search).get("room") || "");
 
   const enter = useCallback((meta, creds) => {
     socketRef.current?.disconnect();
@@ -210,7 +214,7 @@ function App({user, accountClient, openProfile}) {
 
   const isGM = identity.role === "gm";
   const tabs = [["lobby", "Sala"], ["workbench", "Painel"]].concat(isGM ? [["gmShield", "Escudo do Mestre"]] : []).concat(MODULES.filter(([key]) => key === "gmDocs" ? isGM : isGM || roomState.modules[key]).map(([key, label]) => [key, label]));
-  const inviteUrl = location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
+  const inviteUrl = roomState.inviteCode ? `${location.origin}/join/${activeRoom.id}-${roomState.inviteCode}` : location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
   return <div className="app-shell">
     <aside className="rail"><div className="wordmark">M<span>&</span>D</div><div className="rail-campaign"><small>MESA ATUAL</small><strong>{roomState.campaign.title}</strong><span>{roomState.campaign.system || "Sistema a definir"}</span></div>
       <nav className="room-nav">{tabs.map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</nav>

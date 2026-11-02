@@ -1,4 +1,4 @@
-const CACHE='mesa-dados-shell-v14-20261102';
+const CACHE='mesa-dados-shell-v15-20261102';
 const PRELOAD=['/','/manifest.json','/icons/icon-192.png','/icons/icon-512.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PRELOAD)));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim();});
