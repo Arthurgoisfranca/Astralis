@@ -1,21 +1,5 @@
 node_modules/
 dist/
-build/
-coverage/
-*.log
-npm-debug.log*
-
-# Segredos e dados locais
+data/
 .env
 .env.*
-.env.example
-data/
-*.sqlite
-*.sqlite3
-*.db
-
-# Ambiente local
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/

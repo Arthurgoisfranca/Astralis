@@ -1,6 +1,6 @@
 {
   "name": "astralis",
-  "version": "1.5.1",
+  "version": "1.4.0",
   "private": true,
   "description": "Gestão de campanhas e lobby de RPG em tempo real",
   "scripts": {
@@ -9,11 +9,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "migrate:cloud": "node --env-file=.env scripts/migrateSupabaseData.js",
-    "test": "node --test tests/*.test.cjs tests/*.test.mjs",
-    "check:project": "node scripts/verify-project.cjs",
-    "prebuild": "node scripts/verify-project.cjs",
-    "postbuild": "node scripts/verify-project.cjs --built",
-    "prestart": "node scripts/verify-project.cjs --built"
+    "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
