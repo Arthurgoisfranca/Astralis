@@ -8,7 +8,7 @@ npm-debug.log*
 # Segredos e dados locais
 .env
 .env.*
-!.env.example
+.env.example
 data/
 *.sqlite
 *.sqlite3
