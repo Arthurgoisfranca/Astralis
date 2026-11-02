@@ -8,7 +8,7 @@
     "start": "node server.js",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "migrate:cloud": "node --env-file=.env scripts/migrateSupabaseData.js",
+    "migrate:cloud": "node --env-file=.env scripts/migrateSupabasedata.js",
     "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
