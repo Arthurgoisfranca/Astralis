@@ -1,16 +1,11 @@
 node_modules/
 dist/
-<<<<<<< HEAD
-data/
-.env
-.env.*
-=======
 build/
 coverage/
 *.log
 npm-debug.log*
 
-# Segredos, arquivos de servidor e locais
+# Segredos e dados locais
 .env
 .env.*
 !.env.example
@@ -24,4 +19,3 @@ data/
 Thumbs.db
 .vscode/
 .idea/
->>>>>>> 6b70ecdd29d9136f36782aa9222869597063b583
