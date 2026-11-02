@@ -63,7 +63,7 @@ export function Home({ inviteId, setInviteId, rooms, onCreate, onJoin, onResume,
   const statusNames = { completed: "Concluída", active: "Em andamento", notStarted: "Não iniciada" };
   const filteredRooms = rooms.filter(room => (statusFilter === "all" || (room.status || "notStarted") === statusFilter) && (room.title + " " + (room.system || "")).toLowerCase().includes(search.toLowerCase()));
   return <div className="home-screen">
-    <header className="home-top"><div className="wordmark">Mesa <span>&</span> Dados</div><span className="top-note">LOBBY DE CAMPANHAS</span></header>
+    <header className="home-top"><div className="wordmark">Astralis</div><span className="top-note">LOBBY DE CAMPANHAS</span></header>
     <section className="home-hero"><div className="hero-copy"><small>GESTÃO DE CAMPANHAS · SALA EM TEMPO REAL</small><h1>Campanhas e sessões<br/><em>no mesmo lugar.</em></h1><p>Agende encontros, convide o grupo e mantenha fichas, mapas e materiais juntos.</p></div><div className="hero-stats"><span><b>Agenda</b> encontros do grupo</span><span><b>Fichas</b> uma por jogador</span><span><b>Materiais</b> compartilhados pelo Mestre</span></div></section>
     <div className="home-columns">
       <section className="surface create-panel"><div className="section-eyebrow">SALA DE RPG</div><div className="mode-switch"><button className={mode === "create" ? "selected" : ""} onClick={() => setMode("create")}>Criar campanha</button><button className={mode === "join" ? "selected" : ""} onClick={() => setMode("join")}>Entrar com convite</button></div>
@@ -81,11 +81,11 @@ export function Home({ inviteId, setInviteId, rooms, onCreate, onJoin, onResume,
       {filteredRooms.length ? <div className="recent-list">{filteredRooms.map(room => <button key={room.id} className="recent-room" onClick={() => onResume(room)}><span><b>{room.title}</b><small>{room.role === "gm" ? "Mestre" : "Jogador"} · {room.system || "Sistema a definir"} · código {room.id}</small></span><span className={"status-chip " + (room.status || "notStarted")}>{statusNames[room.status || "notStarted"]}</span><i>Entrar →</i></button>)}</div> : <div className="empty-recent"><b>{rooms.length ? "Nenhuma campanha encontrada" : "Sem salas salvas"}</b><span>{rooms.length ? "Ajuste a busca ou o filtro de status." : "Crie uma campanha ou use um convite para entrar."}</span></div>}
       <div className="recent-foot">Chaves de acesso guardadas neste dispositivo.</div>
     </section></div>
-    <footer className="home-footer">Mesa & Dados <span>·</span> Campanhas, encontros e materiais da sua mesa.</footer>
+    <footer className="home-footer">Astralis <span>·</span> Campanhas, encontros e materiais da sua mesa.</footer>
   </div>;
 }
 
-export function Lobby({ room, presence, isGM, inviteUrl, send }) {
+export function Lobby({ room, presence, isGM, inviteUrl, send, identity, currentAvatar }) {
   const [form, setForm] = useState(room.campaign); const [copied, setCopied] = useState(false);
   const statusNames = { completed: "Concluída", active: "Em andamento", notStarted: "Não iniciada" };
   useEffect(() => setForm(room.campaign), [room.campaign]);
@@ -106,7 +106,7 @@ export function Lobby({ room, presence, isGM, inviteUrl, send }) {
     <div className="campaign-facts surface"><Fact label="Duração" value={campaign.duration}/><Fact label="Estilo" value={campaign.style}/><Fact label="Dia habitual" value={campaign.usualDay}/><Fact label="Próxima sessão" value={[campaign.date, campaign.time].filter(Boolean).join(" · ")}/><Fact label="Local" value={campaign.location}/><Fact label="Classificação" value={campaign.ageRating}/><Fact label="Requisitos" value={campaign.requirements}/><Fact label="Gatilhos" value={campaign.triggers}/><Fact label="Resumo" value={campaign.summary}/><Fact label="Observações" value={campaign.observations}/></div>
     <div className="lobby-grid">
       <section className="surface members-panel"><div className="panel-heading"><div><div className="section-eyebrow">PRESENÇA</div><h2>Grupo na sala</h2></div><span className="count-badge">{presence.length}</span></div>
-        <div className="member-list">{presence.map(member => <div key={member.id} className="member-row"><span className={"member-avatar " + (member.role === "gm" ? "gm-avatar" : "")}>{member.name.slice(0, 1).toUpperCase()}</span><span><b>{member.name}</b><small>{member.role === "gm" ? "Mestre" : "Jogador"} · conectado</small></span><i className="presence-dot"></i></div>)}</div>
+        <div className="member-list">{presence.map(member => <div key={member.id} className="member-row"><span className={"member-avatar " + (member.role === "gm" ? "gm-avatar" : "")}>{currentAvatar && identity?.userId===member.id?<img src={currentAvatar} alt={"Avatar de "+member.name} referrerPolicy="no-referrer"/>:member.name.slice(0, 1).toUpperCase()}</span><span><b>{member.name}</b><small>{member.role === "gm" ? "Mestre" : "Jogador"} · conectado</small></span><i className="presence-dot"></i></div>)}</div>
         {isGM && <div className="invite-box"><small>LINK DE CONVITE</small><div><code>{inviteUrl}</code><button className="button quiet" onClick={copyInvite}>{copied ? "Copiado" : "Copiar"}</button></div></div>}
       </section>
       <div className="lobby-right">

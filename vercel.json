@@ -1,1 +1,0 @@
-{"version":2,"buildCommand":"npm ci --include=dev && npm run build","outputDirectory":"dist","rewrites":[{"source":"/((?!assets/|icons/|manifest.json|sw.js).*)","destination":"/index.html"}]}

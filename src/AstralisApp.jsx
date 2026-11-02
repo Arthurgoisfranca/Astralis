@@ -221,20 +221,22 @@ function App({user, accountClient, openProfile}) {
   }
 
   if (!activeRoom || !identity) return <><Home inviteId={inviteId} setInviteId={setInviteId} rooms={rooms} onCreate={createRoom} onJoin={joinRoom} onResume={resume} busy={busy} notice={notice}/>{accountClient && <button className="floating-profile button secondary" onClick={openProfile}>Meu perfil</button>}</>;
-  if (!roomState) return <div className="loading-screen"><div className="wordmark">Mesa <span>&</span> Dados</div><p>Conectando à sala…</p></div>;
+  if (!roomState) return <div className="loading-screen"><div className="wordmark">Astralis</div><p>Conectando à sala…</p></div>;
 
   const isGM = identity.role === "gm";
   const tabs = [["lobby", "Sala"], ["workbench", "Painel"]].concat(isGM ? [["gmShield", "Escudo do Mestre"]] : []).concat(MODULES.filter(([key]) => key === "gmDocs" ? isGM : isGM || roomState.modules[key]).map(([key, label]) => [key, label]));
   const inviteUrl = compactInvitation(activeRoom.id,activeRoom.inviteToken) || location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
-  return <div className="app-shell">
-    <aside className="rail"><div className="wordmark">M<span>&</span>D</div><div className="rail-campaign"><small>MESA ATUAL</small><strong>{roomState.campaign.title}</strong><span>{roomState.campaign.system || "Sistema a definir"}</span></div>
+  const systemName=roomState.campaign.system||'';
+  const systemSkin=systemName.startsWith('D&D')?'dnd':systemName.startsWith('Vampire')?'vampire':systemName==='Cairn 2e'?'cairn':systemName==='Triangle Agency'?'triangle':systemName==='Daggerheart'?'daggerheart':systemName==='Call of Cthulhu'?'cthulhu':systemName==='Sacramento'?'sacramento':systemName==='Ordem Paranormal 2'?'ordem':systemName==='Assimilação RPG'?'assimilacao':'default';
+  return <div className="app-shell" data-system-theme={systemSkin}>
+    <aside className="rail"><div className="wordmark">A✦</div><div className="rail-campaign"><small>MESA ATUAL</small><strong>{roomState.campaign.title}</strong><span>{roomState.campaign.system || "Sistema a definir"}</span></div>
       <nav className="room-nav">{tabs.map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</nav>
       <div className="rail-bottom"><span className={"connection " + (connected ? "online" : "")}></span>{connected ? "Conectado" : "Reconectando"}<button onClick={leave}>Sair da sala</button></div>
     </aside>
-    <main className="main-area"><header className="topline"><div><span className="crumb">Mesa & Dados</span><span className="slash">/</span><strong>{tabs.find(item => item[0] === tab)?.[1] || "Sala"}</strong></div><div className="user-chip"><span className="role-tag">{isGM ? "MESTRE" : "JOGADOR"}</span><span>{identity.name}</span><button className="text-action" onClick={()=>{setNickname(identity.name);setNicknameEditing(v=>!v);}}>Editar nick</button>{accountClient && <button className="text-action" onClick={openProfile}>Meu perfil</button>}</div></header>
+    <main className="main-area"><header className="topline"><div><span className="crumb">Astralis</span><span className="slash">/</span><strong>{tabs.find(item => item[0] === tab)?.[1] || "Sala"}</strong></div><div className="user-chip">{user?.user_metadata?.avatar_url&&<img className="user-avatar" src={user.user_metadata.avatar_url} alt="Meu avatar" referrerPolicy="no-referrer"/>}<span className="role-tag">{isGM ? "MESTRE" : "JOGADOR"}</span><span>{identity.name}</span><button className="text-action" onClick={()=>{setNickname(identity.name);setNicknameEditing(v=>!v);}}>Editar nick</button>{accountClient && <button className="text-action" onClick={openProfile}>Meu perfil</button>}</div></header>
       {nicknameEditing && <form className="nickname-form" onSubmit={saveNick}><input aria-label="Apelido nesta mesa" maxLength="60" value={nickname} onChange={e=>setNickname(e.target.value)} autoFocus/><button className="button secondary">Salvar apelido</button><button className="button quiet" type="button" onClick={()=>setNicknameEditing(false)}>Cancelar</button></form>}
       <div className="page-body">
-        {tab === "lobby" && <Lobby room={roomState} presence={presence} isGM={isGM} inviteUrl={inviteUrl} send={send}/>}
+        {tab === "lobby" && <Lobby room={roomState} presence={presence} isGM={isGM} identity={identity} currentAvatar={user?.user_metadata?.avatar_url} inviteUrl={inviteUrl} send={send}/>}
         {tab === "workbench" && <Workbench room={roomState} presence={presence} isGM={isGM} onOpen={setTab}/>}
         {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} tracker={roomState.gmShield?.tracker} send={send}/>}
         {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send}/>}

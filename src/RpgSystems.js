@@ -7,7 +7,8 @@ export const SYSTEMS = [
   "Daggerheart",
   "Triangle Agency",
   "Sacramento",
-  "Assimilação RPG"
+  "Assimilação RPG",
+  "Cairn 2e"
 ];
 
 const dndFields = [
@@ -292,12 +293,20 @@ const profiles = {
       ]
     }
   },
+  "Cairn 2e": {
+    fields: [["str","FOR"],["dex","DES"],["wil","VON"],["pg","Pontos de Guarda"],["armor","Armadura"],["fatigue","Fadiga"],["inventory","Inventário"]],
+    shield: {source:"CAIRN 2E · GUIA DO JOGADOR PT-BR",scope:"Referências diretas às páginas 8–9 e 62–66",notice:"Salvaguardas: 1d20 ≤ atributo, com 1 sempre sucesso e 20 sempre falha. Ataques acertam automaticamente.",sections:[
+      {title:"Salvaguardas",items:[["FOR, DES, VON","Use o atributo apropriado; resultado d20 igual ou inferior passa."],["Extremos","1 natural sempre sucesso e 20 natural sempre falha."]]},
+      {title:"Inventário",items:[["Capacidade","10 espaços, 4 confortáveis; miudezas 0, volumosos 2."],["Fadiga","Ocupa espaço; Privação por mais de um dia acrescenta Fadiga a cada dia."]]},
+      {title:"Combate",items:[["Ataques","Acertam automaticamente; role dano da arma e subtraia a Armadura (máximo 3)."],["Dano","PG → FOR; atingir exatamente 0 PG consulta Cicatrizes conforme quantidade perdida."]]}
+    ]}
+  },
   "Assimilação RPG": {
     fields: [["vigor", "Vigor"], ["integridade", "Integridade"], ["recurso", "Recurso"], ["arquetipo", "Arquétipo"], ["progresso", "Progresso"], ["condicoes", "Condições"]],
     shield: {
-      source: "REFERÊNCIA NÃO ENVIADA",
-      scope: "O escudo não presume regras para Assimilação RPG sem o manual da edição usada.",
-      notice: "Registre aqui os procedimentos da mesa; os painéis podem ser preenchidos quando houver uma referência do sistema.",
+      source: "ASSIMILAÇÃO RPG · LIVRO DE REGRAS ENVIADO",
+      scope: "Aptidões e testes verificados no livro enviado. Dados simbólicos exigem interpretação das faces oficiais.",
+      notice: "Instinto: dados de seis faces; Conhecimento/Prática: dados simbólicos próprios; mantém-se por padrão um dado (Livro pp. 29–40).",
       sections: [
         { title: "Referência da campanha", items: [
           ["Edição", "Anote a edição, playtest ou versão usada pelo grupo."],

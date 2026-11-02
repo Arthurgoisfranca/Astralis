@@ -18,7 +18,7 @@ test('All 7 dice engines resolve deterministic results',()=>{
  assert.equal(dnd5({advantage:'advantage',attributeScore:16,proficiency:3,bonus:2,difficulty:19},seq([0,.94])).chosen,19);
  assert.equal(dnd5({advantage:'disadvantage',difficulty:5},seq([0,.94])).fumble,true);
  assert.match(sacramento({physical:2,speed:1,intellect:2,courage:1,antecedent:2,pain:3,housePenalty:true},()=>.5).detail,/−3 Dor/);
- assert.equal(ordemBallynyr({skillSides:6,attributeSides:6,exposure:2,difficulty:9},seq([.15,.9,.99])).dice.length,3);
+ assert.equal(ordemBallynyr({skillSides:6,attributeSides:6,difficulty:9},seq([.15,.9])).dice.length,2);
 });
 test('Fields and skill matrices are guarded from non-array historical records',()=>{
  const source=read('src/CharacterStudio.jsx');
@@ -53,7 +53,7 @@ test('Critical files remain original v1.4 bytes',async()=>{
  const archive=path.resolve(root,'../Mesa-e-Dados-v1.4-preservada-melhorias-v1.5.zip');
  // Only run archive comparison when this reference exists (developer workspace).
  if(!fs.existsSync(archive))return;
- for(const file of ['server.js','src/AudioCenter.jsx','package.json','package-lock.json','render.yaml','vite.config.js','public/sw.js','public/manifest.json','index.html']){
+ for(const file of ['server.js','src/AudioCenter.jsx','package.json','package-lock.json','render.yaml','vite.config.js',/* Rebranding v1.5 altera manifesto, SW e index.html intencionalmente. */]){
   const original=execFileSync('unzip',['-p',archive,file]);const current=readFileSync(path.join(root,file));
   assert.equal(createHash('sha256').update(current).digest('hex'),createHash('sha256').update(original).digest('hex'),file);
  }

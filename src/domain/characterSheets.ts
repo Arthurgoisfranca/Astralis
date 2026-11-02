@@ -8,6 +8,7 @@ export const SYSTEM_IDS = [
   "Triangle Agency",
   "Sacramento",
   "Assimilação RPG",
+  "Cairn 2e",
 ] as const;
 
 export type SystemId = (typeof SYSTEM_IDS)[number];
@@ -31,6 +32,7 @@ export interface OrdemParanormalSheet extends SheetIdentity {
   readonly className: string;
   readonly level: number;
   readonly skills: Readonly<Record<string, number>>;
+  readonly diceSkills: Readonly<Record<string, Readonly<{skillDie:number;attributeDie:number}>>>;
   readonly skillModifiers: Readonly<Record<string, number>>;
   readonly levelMarks: readonly boolean[];
   readonly relationships: readonly string[];
@@ -137,6 +139,35 @@ export interface AssimilacaoLegacySheet extends SheetIdentity {
   readonly progress: number;
   readonly conditions: readonly string[];
   readonly customFields: Readonly<Record<string, string | number | boolean>>;
+  /** Registros do manual Assimilação: Instintos e Aptidões, sem converter dados simbólicos em numerais. */
+  readonly instincts: Readonly<Record<"influencia"|"percepcao"|"potencia"|"reacao"|"resolucao"|"sagacidade", number>>;
+  readonly knowledge: string;
+  readonly practices: string;
+  readonly aptitudes: string;
+  readonly health: ResourceTrack;
+  readonly determination: ResourceTrack;
+  readonly assimilation: number;
+  readonly inventory: readonly string[];
+  readonly weapons: readonly string[];
+}
+
+/** Campos comprovados em Cairn 2e, Guia do Jogador pp. 8–9 e 62–66. */
+export interface Cairn2eSheet extends SheetIdentity {
+  readonly system: "Cairn 2e";
+  readonly background: string;
+  readonly attributes: Readonly<{ str: number; dex: number; wil: number }>;
+  readonly guard: ResourceTrack;
+  readonly armor: number;
+  readonly fatigue: number;
+  readonly deprivation: string;
+  readonly scars: readonly string[];
+  readonly inventory: readonly Readonly<{ name: string; type: "normal" | "volumoso" | "miudeza"; notes: string }> [];
+  readonly weapons: readonly string[];
+  readonly spells: readonly string[];
+  readonly characteristics: string;
+  readonly bonds: string;
+  readonly omens: string;
+  readonly private: boolean;
 }
 
 export type CharacterSheet =
@@ -147,7 +178,8 @@ export type CharacterSheet =
   | TriangleAgencySheet
   | DndSheet
   | SacramentoSheet
-  | AssimilacaoLegacySheet;
+  | AssimilacaoLegacySheet
+  | Cairn2eSheet;
 
 const identity = (characterId: string, playerId: string, name: string): SheetIdentity => ({
   characterId,
@@ -164,7 +196,7 @@ export function createBlankSheet(system: SystemId, characterId: string, playerId
   const base = identity(characterId, playerId, name);
   switch (system) {
     case "Ordem Paranormal 2":
-      return { ...base, system, attributes: { physical: 0, mind: 0, emotion: 0 }, resources: { hitPoints: track(), determination: track() }, className: "", level: 1, skills: {}, skillModifiers: {}, levelMarks: [], relationships: [], appearance: "", inventory: [] };
+      return { ...base, system, attributes: { physical: 0, mind: 0, emotion: 0 }, resources: { hitPoints: track(), determination: track() }, className: "", level: 1, skills: {}, diceSkills:{}, skillModifiers: {}, levelMarks: [], relationships: [], appearance: "", inventory: [] };
     case "Daggerheart":
       return { ...base, system, attributes: { agility: 0, strength: 0, finesse: 0, instinct: 0, presence: 0, knowledge: 0 }, evasion: 0, damageThresholds: { minor: 0, major: 0, severe: 0 }, resources: { hitPoints: track(), stress: track(), hope: track(), armor: track() }, domains: [], subclasses: [], className: "", level: 1, inventory: [] };
     case "Call of Cthulhu":
@@ -179,7 +211,9 @@ export function createBlankSheet(system: SystemId, characterId: string, playerId
     case "Sacramento":
       return { ...base, system, attributes: { physical: 0, speed: 0, intellect: 0, courage: 0 }, lifeCircles: emptyCircles(), painCircles: emptyPainCircles(), combatActions: [], backgrounds: [], mount: { name: "", type: "", power: 0, resistance: 0, equipment: [] } };
     case "Assimilação RPG":
-      return { ...base, system, archetype: "", vigor: track(), integrity: track(), progress: 0, conditions: [], customFields: {} };
+      return { ...base, system, archetype: "", vigor: track(), integrity: track(), progress: 0, conditions: [], customFields: {},instincts:{influencia:0,percepcao:0,potencia:0,reacao:0,resolucao:0,sagacidade:0},knowledge:"",practices:"",aptitudes:"",health:track(),determination:track(),assimilation:0,inventory:[],weapons:[] };
+    case "Cairn 2e":
+      return { ...base, system, background: "", attributes: { str: 0, dex: 0, wil: 0 }, guard: track(), armor: 0, fatigue: 0, deprivation: "", scars: [], inventory: [], weapons: [], spells: [], characteristics: "", bonds: "", omens: "", private: false };
   }
 }
 export interface AdaptiveSheetInput {
@@ -206,6 +240,12 @@ const statTrack = (input: AdaptiveSheetInput, key: string): ResourceTrack => {
   const current = Math.max(0, Number(currentText) || 0), max = Math.max(current, Number(maxText) || current);
   return Object.freeze({ current, max });
 };
+const statDie = (input: AdaptiveSheetInput, key: string): number => {const text=statText(input,key).replace(/^d/i,"");const sides=Number(text);return [4,6,8,10,12,20].includes(sides)?sides:0;};
+const orderDiceSkills = (input: AdaptiveSheetInput): OrdemParanormalSheet["diceSkills"] => Object.freeze(Object.fromEntries(
+ statText(input,"pericias").split(/[\n;]/).map(line=>line.match(/^\s*(.+?)\s*[:=]\s*d(4|6|8|10|12|20)\|d(4|6|8|10|12|20)\s*$/i))
+ .filter((match):match is RegExpMatchArray => Boolean(match))
+ .map(match=>[match[1].trim(),{skillDie:Number(match[2]),attributeDie:Number(match[3])}])
+));
 const numericEntries = (input: AdaptiveSheetInput, key: string): Readonly<Record<string, number>> => Object.freeze(Object.fromEntries(
   statText(input, key).split(/[\n,;]/).map(entry => entry.match(/^\s*(.+?)\s*[:=]\s*(-?\d+(?:\.\d+)?)\s*$/)).filter((match): match is RegExpMatchArray => Boolean(match)).map(match => [match[1].trim(), Number(match[2])]),
 ));
@@ -223,7 +263,7 @@ export function buildCharacterSheet(system: SystemId, characterId: string, playe
   switch (system) {
     case "Ordem Paranormal 2": {
       const sheet = base as OrdemParanormalSheet;
-      return { ...sheet, ...identityFields, attributes: { physical: statNumber(input, "physical"), mind: statNumber(input, "mind"), emotion: statNumber(input, "emotion") }, resources: { hitPoints: statTrack(input, "pv"), determination: statTrack(input, "pd") }, className: statText(input, "classe") || input.classLevel || "", level: parseLevel(input), skills: numericEntries(input, "pericias"), skillModifiers: {}, levelMarks: Object.freeze(Array.from({ length: parseLevel(input) }, () => false)), relationships: Object.freeze(statList(input, "relacoes")), appearance: input.appearance || "", inventory: Object.freeze(statList(input, "inventory")) };
+      return { ...sheet, ...identityFields, attributes: { physical: statDie(input, "physical"), mind: statDie(input, "mind"), emotion: statDie(input, "emotion") }, resources: { hitPoints: statTrack(input, "pv"), determination: statTrack(input, "pd") }, className: statText(input, "classe") || input.classLevel || "", level: parseLevel(input), skills: numericEntries(input, "pericias"), diceSkills: orderDiceSkills(input), skillModifiers: {}, levelMarks: Object.freeze(Array.from({ length: parseLevel(input) }, () => false)), relationships: Object.freeze(statList(input, "relacoes")), appearance: input.appearance || "", inventory: Object.freeze(statList(input, "inventory")) };
     }
     case "Daggerheart": {
       const sheet = base as DaggerheartSheet;
@@ -250,9 +290,20 @@ export function buildCharacterSheet(system: SystemId, characterId: string, playe
       const sheet = base as SacramentoSheet, life = circleMarks(input, "lifeCircles"), pain = circleMarks(input, "painCircles");
       return { ...sheet, ...identityFields, attributes: { physical: statNumber(input, "physical"), speed: statNumber(input, "speed"), intellect: statNumber(input, "intellect"), courage: statNumber(input, "courage") }, lifeCircles: Object.freeze(sheet.lifeCircles.map((circle, index) => ({ ...circle, marked: life[index] }))) as SixCircles, painCircles: Object.freeze(sheet.painCircles.map((circle, index) => ({ ...circle, marked: pain[index] }))) as SacramentoSheet["painCircles"], combatActions: Object.freeze(statList(input, "combatActions")), backgrounds: Object.freeze(statList(input, "backgrounds")), mount: { name: statText(input, "mountName"), type: statText(input, "mountType"), power: statNumber(input, "mountPower"), resistance: statNumber(input, "mountResistance"), equipment: Object.freeze(statList(input, "mountEquipment")) } };
     }
+    case "Cairn 2e": {
+      const sheet = base as Cairn2eSheet;
+      const items = statText(input, "inventory").split(/\r?\n/).filter(Boolean).map(line => {
+        const [name, rawType = "normal", notes = ""] = line.split("|").map(t => t.trim());
+        const type: "normal" | "volumoso" | "miudeza" = rawType === "volumoso" || rawType === "miudeza" ? rawType : "normal";
+        return { name, type, notes };
+      }).filter(item => item.name);
+      const spaces = items.reduce((sum,item) => sum + (item.type === "miudeza" ? 0 : item.type === "volumoso" ? 2 : 1),0) + Math.max(0,statNumber(input,"fatigue"));
+      if (spaces > 10) throw new Error("Cairn 2e: inventário não pode exceder 10 espaços.");
+      return { ...sheet, ...identityFields, background: statText(input,"background"), attributes: { str: statNumber(input,"str"),dex:statNumber(input,"dex"),wil:statNumber(input,"wil") }, guard: {current:spaces===10?0:Math.max(0,statNumber(input,"pg")),max:Math.max(0,statNumber(input,"pgMax"))}, armor:Math.min(3,Math.max(0,statNumber(input,"armor"))), fatigue:Math.max(0,statNumber(input,"fatigue")), deprivation:statText(input,"deprivation"), scars:Object.freeze(statList(input,"scars")),inventory:Object.freeze(items),weapons:Object.freeze(statList(input,"weapons")),spells:Object.freeze(statList(input,"spells")),characteristics:statText(input,"characteristics"),bonds:statText(input,"bonds"),omens:statText(input,"omens"),private:statText(input,"private")==="Sim" };
+    }
     case "Assimilação RPG": {
       const sheet = base as AssimilacaoLegacySheet;
-      return { ...sheet, ...identityFields, archetype: statText(input, "arquetipo") || input.classLevel || "", vigor: statTrack(input, "vigor"), integrity: statTrack(input, "integridade"), progress: statNumber(input, "progresso"), conditions: Object.freeze(statList(input, "condicoes")), customFields: Object.freeze({ resource: statText(input, "recurso") }) };
+      return { ...sheet, ...identityFields, archetype: statText(input, "arquetipo") || input.classLevel || "", vigor: statTrack(input, "vigor"), integrity: statTrack(input, "integridade"), progress: statNumber(input, "progresso"), conditions: Object.freeze(statList(input, "condicoes")), customFields: Object.freeze({ resource: statText(input, "recurso") }), instincts:{influencia:statNumber(input,"instinct_influencia"),percepcao:statNumber(input,"instinct_percepcao"),potencia:statNumber(input,"instinct_potencia"),reacao:statNumber(input,"instinct_reacao"),resolucao:statNumber(input,"instinct_resolucao"),sagacidade:statNumber(input,"instinct_sagacidade")}, knowledge:statText(input,"knowledge"),practices:statText(input,"practices"),aptitudes:statText(input,"aptitudes"),health:statTrack(input,"health"),determination:statTrack(input,"determination"),assimilation:statNumber(input,"assimilation"),inventory:Object.freeze(statList(input,"inventory")),weapons:Object.freeze(statList(input,"weapons")) };
     }
   }
 }

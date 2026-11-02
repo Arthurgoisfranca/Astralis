@@ -275,3 +275,37 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 :root[data-theme="dark"] .modal-card{background:#24272b;border-color:#4c5c59;color:#e8e9ec}
 :root[data-theme="light"] .token-maker .token-help{color:#4b6570}
 body:has(.modal-scrim) .global-theme-toggle{z-index:1}
+
+/* Astralis 1.5.0 · 3 cores por sistema: superfície, secundária, destaque */
+.app-shell[data-system-theme="dnd"]{--system-dark:#171f1d;--system-mid:#243b32;--system-accent:#a8d7b1}
+.app-shell[data-system-theme="vampire"]{--system-dark:#21171c;--system-mid:#462530;--system-accent:#e18a95}
+.app-shell[data-system-theme="daggerheart"]{--system-dark:#1e2035;--system-mid:#343858;--system-accent:#e4bd84}
+.app-shell[data-system-theme="cairn"]{--system-dark:#151e19;--system-mid:#2f443b;--system-accent:#b9cc9c}
+.app-shell[data-system-theme="triangle"]{--system-dark:#172031;--system-mid:#31415b;--system-accent:#e2a8bd}
+.app-shell[data-system-theme="cthulhu"]{--system-dark:#182823;--system-mid:#31534c;--system-accent:#b9d4c1}
+.app-shell[data-system-theme="sacramento"]{--system-dark:#30221c;--system-mid:#5a3e30;--system-accent:#ead1a0}
+.app-shell[data-system-theme="ordem"]{--system-dark:#211d25;--system-mid:#463449;--system-accent:#dcb69d}
+.app-shell[data-system-theme="assimilacao"]{--system-dark:#192527;--system-mid:#2b5250;--system-accent:#a3d6ca}
+.app-shell[data-system-theme="default"]{--system-dark:#152026;--system-mid:#2a4545;--system-accent:#a6dfc5}
+:root[data-theme="dark"] .app-shell .rail{background:linear-gradient(165deg,var(--system-mid),var(--system-dark) 80%)}
+:root[data-theme="dark"] .app-shell .topline{background:var(--system-dark);border-bottom:1px solid var(--system-mid)}
+:root[data-theme="dark"] .app-shell .role-tag{color:var(--system-accent)}
+:root[data-theme="light"] .app-shell .rail{background:linear-gradient(165deg,var(--system-mid),var(--system-dark) 80%)}
+:root[data-theme="light"] .app-shell .topline{background:#f8fafc;border-bottom:2px solid var(--system-accent)}
+:root[data-theme="light"] .app-shell .role-tag{background:#e9f0ee;color:var(--system-mid)}
+.user-avatar{width:31px;height:31px;object-fit:cover;border-radius:50%;border:2px solid var(--system-accent,#72cfa7)}
+.member-avatar{overflow:hidden;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.member-avatar img{width:100%;height:100%;border-radius:inherit;object-fit:cover}
+.cairn-status{border:1px solid #658d71}.cairn-status .resource-bar{height:12px;margin:10px 0}
+.cairn-combat{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-block:12px}
+.cairn-combat label{max-width:180px}.weapon-actions{display:grid;gap:10px}.weapon-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px;border:1px solid #60756855;border-radius:12px}.weapon-row b{min-width:140px}.weapon-row small{flex:1;min-width:120px}
+.roll-dice span[data-dice]{min-width:55px;min-height:55px;display:inline-flex;align-items:center;justify-content:center;position:relative;font-weight:800;line-height:1;isolation:isolate}
+.roll-dice span[data-dice]::before{content:"";position:absolute;z-index:-1;inset:0;background:currentColor;opacity:.16;border:2px solid currentColor;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+.roll-dice span[data-dice="d4"]::before{clip-path:polygon(50% 4%,96% 90%,4% 90%)}
+.roll-dice span[data-dice="d6"]::before{clip-path:polygon(12% 10%,88% 10%,88% 90%,12% 90%)}
+.roll-dice span[data-dice="d8"]::before{clip-path:polygon(50% 0,96% 50%,50% 100%,4% 50%)}
+.roll-dice span[data-dice="d10"]::before,.roll-dice span[data-dice="d100"]::before{clip-path:polygon(50% 0,80% 16%,96% 54%,50% 100%,4% 54%,20% 16%)}
+.roll-dice span[data-dice="d12"]::before{clip-path:polygon(30% 2%,70% 2%,98% 30%,98% 70%,70% 98%,30% 98%,2% 70%,2% 30%)}
+.roll-dice span[data-dice="d20"]::before{clip-path:polygon(50% 0%,92% 20%,100% 65%,50% 100%,0% 65%,8% 20%)}
+.roll-studio.roll-theme-cairn{--studio-accent:#76ba88}
+@media(max-width:600px){.weapon-row{display:grid;grid-template-columns:1fr 1fr}.weapon-row button{grid-column:1/-1}.cairn-combat{flex-direction:column;align-items:stretch}.cairn-combat label{max-width:none}}
