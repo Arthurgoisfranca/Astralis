@@ -6,18 +6,17 @@ coverage/
 *.log
 npm-debug.log*
 
-# Segredos locais (NUNCA publicar)
+# Segredos, arquivos de servidor e locais
 .env
 .env.*
 !.env.example
-!.env.sample
+data/
+*.sqlite
+*.sqlite3
+*.db
 
-# Arquivos temporários e locais
+# Ambiente local
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-*.sqlite
-*.sqlite3
-*.db
-.data/
