@@ -51,6 +51,7 @@ const uploadMaxSize = 30 * 1024 * 1024;
 const io = new Server(server, { maxHttpBufferSize: 35 * 1024 * 1024, cors: corsOptions });
 
 function id(bytes = 10) { return crypto.randomBytes(bytes).toString("hex"); }
+function inviteCode(room) { return crypto.createHash("sha256").update(room.inviteToken).digest("base64url").slice(0, 12); }
 function text(value, max = 5000) { return String(value ?? "").trim().slice(0, max); }
 function imageData(value, max = 2_000_000) { const data = text(value, max); return /^data:image\/(png|jpeg|webp);base64,/.test(data) ? data : ""; }
 function safeImageUrl(value) { const url = text(value, 1200); return /^https:\/\/[^\s]+$/i.test(url) || /^\/files\/[a-z0-9_-]+\/(?:[a-f0-9_-]+\/)*[a-f0-9_-]+\.[a-z0-9]+$/i.test(url) ? url : ""; }
@@ -120,7 +121,7 @@ function publicState(room, socketData) {
   const players = state.players.map(({ token, ...player }) => ({ ...player }));
   const ownPrivate = isGM ? (state.notes.private.gm || "") : (state.notes.private[socketData.userId] || "");
   return {
-    id: room.id, campaign: state.campaign, modules: state.modules,
+    id: room.id, inviteCode: isGM ? inviteCode(room) : undefined, campaign: state.campaign, modules: state.modules,
     players: isGM || state.modules.characters ? players : players.filter(player => player.id === socketData.userId),
     systemGuide: isGM || state.modules.system ? (isGM ? state.systemGuide : { ...state.systemGuide, consultations: state.systemGuide.consultations.filter(row => row.active) }) : { text: "", consultations: [] }, gmShield: isGM ? state.gmShield : { notes: "" },
     lore: isGM || state.modules.lore ? state.lore : { text: "" },
@@ -177,7 +178,7 @@ function applyAction(room, socket, action) {
     case "system:consultation:delete": requireGM(socket); state.systemGuide.consultations = state.systemGuide.consultations.filter(row=>row.id!==payload.id); break;
     case "system:consultation:toggle": requireGM(socket); {const row=state.systemGuide.consultations.find(item=>item.id===payload.id); if(row) row.active=Boolean(payload.active);} break; case "gm:shield:update": requireGM(socket); state.gmShield.notes = text(payload.value, 30000); break;
     case "gm:tracker:update": { requireGM(socket); const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }, key=payload.key==="fear"?"fear":"chaos", limit=key==="fear"?12:999; tracker[key]=Math.min(limit,Math.max(0,Math.trunc(Number(payload.value)||0))); break; }
-    case "dice:record": { const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }; let summary="",system=text(payload.system,40),actor=text(payload.actor,80); if(system!==state.campaign.system) throw new Error("A rolagem não corresponde ao sistema desta mesa."); if(system==="Triangle Agency"){ const dice=Array.isArray(payload.dice)?payload.dice.slice(0,6).map(Number):[]; if(dice.length!==6||dice.some(value=>!Number.isInteger(value)||value<1||value>4)) throw new Error("A rolagem de Triangle Agency precisa ter seis d4."); const threes=dice.filter(value=>value===3).length,triscendence=threes===3,chaos=triscendence?0:6-threes; tracker.chaos=Math.min(999,(Number(tracker.chaos)||0)+chaos); summary=triscendence?"Triscendência · sem Caos":threes+" sucesso(s) · +"+chaos+" Caos"; } else if(system==="Daggerheart"){ const hope=Number(payload.hopeDie),fear=Number(payload.fearDie); if(!Number.isInteger(hope)||!Number.isInteger(fear)||hope<1||hope>12||fear<1||fear>12) throw new Error("Informe os dois resultados de d12."); const critical=hope===fear,withFear=fear>hope; if(!critical&&withFear) tracker.fear=Math.min(12,(Number(tracker.fear)||0)+1); summary=critical?"Crítico":withFear?"Resultado com Medo · +1 Medo":"Resultado com Esperança"; } else throw new Error("Sistema de rolagem não suportado."); tracker.rolls=([{id:id(6),system,actor,summary,createdAt:Date.now()},...(tracker.rolls||[])]).slice(0,30); break; }
+    case "dice:record": { const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }; let summary="",system=text(payload.system,40),actor=text(payload.actor,80); if(system!==state.campaign.system) throw new Error("A rolagem não corresponde ao sistema desta mesa."); if(system==="Triangle Agency"){ const dice=Array.isArray(payload.dice)?payload.dice.slice(0,6).map(Number):[]; if(dice.length!==6||dice.some(value=>!Number.isInteger(value)||value<1||value>4)) throw new Error("A rolagem de Triangle Agency precisa ter seis d4."); const threes=dice.filter(value=>value===3).length,stable=threes>0&&threes%3===0,triscendence=threes===3,chaos=stable?0:6-threes; tracker.chaos=Math.min(999,(Number(tracker.chaos)||0)+chaos); summary=triscendence?"Triscendência · sem Caos":threes+" sucesso(s) · +"+chaos+" Caos"; } else if(system==="Daggerheart"){ const hope=Number(payload.hopeDie),fear=Number(payload.fearDie); if(!Number.isInteger(hope)||!Number.isInteger(fear)||hope<1||hope>12||fear<1||fear>12) throw new Error("Informe os dois resultados de d12."); const critical=hope===fear,withFear=fear>hope; if(!critical&&withFear) tracker.fear=Math.min(12,(Number(tracker.fear)||0)+1); summary=critical?"Crítico":withFear?"Resultado com Medo · +1 Medo":"Resultado com Esperança"; } else throw new Error("Sistema de rolagem não suportado."); tracker.rolls=([{id:id(6),system,actor,summary,createdAt:Date.now()},...(tracker.rolls||[])]).slice(0,30); break; }
     case "lore:update": requireGM(socket); state.lore.text = text(payload.value, 30000); break;
     case "npc:save": {
       requireGM(socket); if (!text(payload.name, 80)) throw new Error("Informe o nome do NPC.");
@@ -408,7 +409,7 @@ app.post("/api/rooms/:roomId/join", async (req, res) => {
     const room = await readRoom(req.params.roomId), name = text(req.body && req.body.name, 60), invite = text(req.body && req.body.inviteToken, 100);
     if (!room) return res.status(404).json({ error: "Sala não encontrada." });
     if (!name) return res.status(400).json({ error: "Informe seu nome." });
-    if (!invite || invite !== room.inviteToken) return res.status(403).json({ error: "Convite inválido. Use o link enviado pelo Mestre." });
+    if (!invite || (invite !== room.inviteToken && invite !== inviteCode(room))) return res.status(403).json({ error: "Convite inválido. Use o link enviado pelo Mestre." });
     if (room.state.campaign.availableSeats <= 0) return res.status(403).json({ error: "Não há vagas disponíveis nesta mesa." });
     const player = { id: id(8), token: id(24), name, character: null };
     room.state.players.push(player); room.state.campaign.availableSeats = Math.max(0, room.state.campaign.availableSeats - 1); await saveRoom(room);
@@ -528,8 +529,22 @@ app.get("/api/rooms/:roomId/private-file", async (req, res) => {
 });
 app.use("/files/" + buckets.public, express.static(path.join(dataDir, "uploads", buckets.public)));
 app.use("/files/" + buckets.community, express.static(path.join(dataDir, "uploads", buckets.community)));
-app.use(express.static(path.join(__dirname, "dist")));
-app.use((req, res, next) => { if (req.path.startsWith("/api/")) return next(); res.sendFile(path.join(__dirname, "dist", "index.html")); });
+// Do not serve broken or accidentally overwritten HTML as a production website.
+const bundleIndex = path.join(__dirname, "dist", "index.html");
+if (process.env.NODE_ENV === "production") {
+  const html = fs.existsSync(bundleIndex) ? fs.readFileSync(bundleIndex, "utf8") : "";
+  if (!/<!doctype\s+html/i.test(html) || !/<div\s+id=["']root["']/.test(html) || !/\/assets\/[^"']+\.js/.test(html)) {
+    console.error("ERRO: dist/index.html não é um build Vite válido. Execute npm ci --include=dev && npm run build e verifique index.html no GitHub.");
+    process.exit(1);
+  }
+}
+const distRoot = path.join(__dirname, "dist");
+app.use(express.static(distRoot, { index: false }));
+app.use((req, res, next) => {
+  if ((req.method !== "GET" && req.method !== "HEAD") || /^(\/api\/|\/socket\.io|\/files\/|\/assets\/)/.test(req.path)) return next();
+  res.set("Cache-Control", "no-store");
+  res.type("html").sendFile(path.join(distRoot, "index.html"));
+});
 
 io.use(async (socket, next) => {
   try {
