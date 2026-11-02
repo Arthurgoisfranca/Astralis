@@ -1,0 +1,15 @@
+import React, {useEffect, useState} from 'react';
+export default function SystemConsultations({value, isGM, send}) {
+  const consultations = value?.consultations || [];
+  const legacy = value?.text ? [{id:'legacy', title:'Regras da campanha (legado)', body:value.text,active:true}] : [];
+  const items = [...consultations, ...legacy].filter(item => isGM || item.active);
+  const [active,setActive] = useState(''), [title,setTitle] = useState(''), [body,setBody] = useState(''), [saving,setSaving] = useState(false), [notice,setNotice] = useState('');
+  useEffect(() => { if (active !== 'new' && !items.some(item=>item.id===active)) {const row=items[0];setActive(row?.id || 'new');setTitle(row?.title || '');setBody(row?.body || '');} }, [items.length, items.map(i=>i.id).join('|'),active]);
+  const item = items.find(row=>row.id===active);
+  const select = row => {setActive(row.id); setTitle(row.title); setBody(row.body);};
+  const save = async () => {if(!body.trim()) return; setSaving(true); const result=await send('system:consultation:save',{id:active==='legacy'||active==='new'?'':active,title,body,active:true}); setSaving(false); if(result?.ok) {setNotice('Consulta salva na nuvem.'); setActive(''); setTitle(''); setBody('');} else setNotice(result?.error||'Falha ao salvar');};
+  return <div className="view-stack"><div className="page-title-row"><div><div className="section-eyebrow">REGRAS DA CAMPANHA</div><h1>Biblioteca de consultas</h1><p>Histórico organizado; cada consulta permanece disponível para a mesa.</p></div></div>
+    <div className="consultations-layout"><aside className="surface consultations-list"><h3>Consultas ({items.length})</h3>{isGM && <button className="button secondary" onClick={()=>{setActive('new');setTitle('');setBody('');}}>+ Nova consulta</button>}{items.map(row=><button key={row.id} className={row.id===active?'selected':''} onClick={()=>select(row)}>{row.title}<small>{row.active?'Visível':'Oculta'}</small></button>)}</aside>
+    <section className="surface consultations-detail">{isGM ? <><input value={title} placeholder="Título da consulta" aria-label="Título da consulta" onChange={e=>setTitle(e.target.value)} /><textarea value={body} aria-label="Texto da consulta" placeholder="Escreva as regras e referências da campanha." onChange={e=>setBody(e.target.value)} rows="12"/><div className="save-row"><button className="button primary" disabled={saving || !body.trim()} onClick={save}>{saving?'Salvando…':'Salvar consulta'}</button>{item && item.id!=='legacy' && <><button className="button quiet" onClick={()=>send('system:consultation:toggle',{id:item.id,active:!item.active})}>{item.active?'Ocultar dos jogadores':'Publicar para jogadores'}</button><button className="button quiet" onClick={()=>{if(confirm('Excluir esta consulta?'))send('system:consultation:delete',{id:item.id});}}>Excluir</button></>}</div>{notice && <p role="status">{notice}</p>}</> : item ? <><h2>{item.title}</h2><div className="lore-read" style={{whiteSpace:'pre-wrap'}}>{item.body}</div></> : <p className="muted-copy">O Mestre ainda não publicou consultas.</p>}</section></div>
+  </div>;
+}

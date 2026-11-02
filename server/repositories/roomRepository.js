@@ -24,6 +24,7 @@ class RoomRepository {
         gm_token: room.gmToken,
         invite_token: room.inviteToken,
         state: room.state,
+        current_map_url: room.state?.map?.image || null,
         created_at: new Date(room.createdAt).toISOString(),
       });
       if (error) throw error;
@@ -35,7 +36,7 @@ class RoomRepository {
 
   async updateState(roomId, state) {
     if (this.supabase) {
-      const { error } = await this.supabase.from("rooms").update({ state }).eq("id", roomId);
+      const { error } = await this.supabase.from("rooms").update({ state, current_map_url: state.map?.image || null }).eq("id", roomId);
       if (error) throw error;
       return;
     }

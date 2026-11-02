@@ -1,0 +1,10 @@
+{
+  "id": "/", "name": "Mesa & Dados — RPG Online", "short_name": "Mesa & Dados", "description": "Campanhas, fichas, mapas e trilha sonora para RPG online.",
+  "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any", "lang": "pt-BR",
+  "background_color": "#191a1f", "theme_color": "#191a1f",
+  "icons": [
+    {"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ],
+  "shortcuts": [{"name":"Minhas campanhas","url":"/","description":"Abrir mesas salvas"}]
+}

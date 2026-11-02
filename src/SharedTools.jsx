@@ -143,7 +143,7 @@ export function TokenMaker({ initial, onClose, onSave }) {
 
   async function choose(file) {
     if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 8 * 1024 * 1024) return alert("Escolha uma imagem de até 8 MB.");
+    if (file.size > 30 * 1024 * 1024) return alert("Escolha uma imagem de até 30 MB.");
     try { setSource(await readImage(file)); } catch (error) { alert(error.message); }
   }
   function download() {

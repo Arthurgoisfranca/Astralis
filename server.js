@@ -20,6 +20,7 @@ const supabase = cloud ? createClient(supabaseUrl, supabaseSecret, { auth: { per
 const buckets = { public: process.env.SUPABASE_PUBLIC_BUCKET || "mesa-assets", private: process.env.SUPABASE_PRIVATE_BUCKET || "mesa-private", community: process.env.SUPABASE_COMMUNITY_BUCKET || "mesa-community" };
 let db = null;
 if (!cloud) {
+  if (process.env.NODE_ENV === "production") console.warn("ALERTA: banco local no deploy; o armazenamento temporário não persiste. Configure Supabase antes de usar mesas reais.");
   db = new Database(path.join(dataDir, "mesa.sqlite"));
   db.pragma("journal_mode = WAL");
   db.exec("CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, gm_token TEXT NOT NULL, invite_token TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, created_at INTEGER NOT NULL)");
@@ -32,34 +33,21 @@ if (!cloud) {
 const roomRepository = new RoomRepository({ supabase, db });
 const communityLibraryRepository = new CommunityLibraryRepository({ supabase, db });
 const app = express();
-// Render termina TLS no proxy. Confiar somente no primeiro proxy da plataforma.
-if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
-  app.use((req, res, next) => {
-    // A conexão entre proxy e Node pode ser HTTP; o navegador sempre deve usar HTTPS.
-    if (!req.secure) return res.redirect(308, `https://${req.get("host")}${req.originalUrl}`);
-    next();
-  });
-  app.use((req, res, next) => {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-    next();
-  });
-}
-app.disable("x-powered-by");
-app.use((req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("X-Frame-Options", "DENY");
-  next();
-});
 const allowedOrigins = (process.env.CORS_ORIGIN || "").split(",").map(origin => origin.trim()).filter(Boolean); const corsOptions = { origin: (origin, callback) => callback(null, !origin || !allowedOrigins.length || allowedOrigins.includes(origin)), credentials: true }; app.use(cors(corsOptions));
 app.use(express.json({ limit: "35mb" }));
 const server = http.createServer(app);
 const actionQueues = new Map();
+const audioChannels = new Map();
+function publishAudio(roomId, music) {
+  if(!supabase)return;
+  let channel=audioChannels.get(roomId);
+  if(!channel){channel=supabase.channel("room_audio_"+roomId,{config:{private:true,broadcast:{ack:false}}});audioChannels.set(roomId,channel);channel.subscribe();}
+  channel.send({type:"broadcast",event:"audio_state",payload:{...music,serverTime:Date.now()}}).catch(error=>console.warn("Audio broadcast indisponível:",error.message));
+}
 const uploadSessions = new Map();
 const uploadChunkSize = 5 * 1024 * 1024;
 const tusChunkSize = 6 * 1024 * 1024;
-const uploadMaxSize = 150 * 1024 * 1024;
+const uploadMaxSize = 30 * 1024 * 1024;
 const io = new Server(server, { maxHttpBufferSize: 35 * 1024 * 1024, cors: corsOptions });
 
 function id(bytes = 10) { return crypto.randomBytes(bytes).toString("hex"); }
@@ -74,6 +62,20 @@ async function readRoom(roomId) {
 }
 async function insertNewRoom(room) { await roomRepository.insert(room); }
 async function saveRoom(room) { await roomRepository.updateState(room.id, room.state); }
+async function synchronizeJournal(room, action) {
+  if (!supabase || !['journal:save','journal:delete'].includes(action?.type)) return;
+  if (action.type==='journal:delete') {
+    const entryId=text(action.payload?.id,60);
+    const {error}=await supabase.from('campaign_journals').delete().eq('campaign_id',room.id).eq('id',entryId);
+    if(error)throw error;
+  } else {
+    const entry=room.state.journal.find(row=>row.id===action.payload?.id) || room.state.journal[0];
+    if(!entry)return;
+    const {error}=await supabase.from('campaign_journals').upsert({id:entry.id,campaign_id:room.id,author_id:entry.authorId,author_name:entry.authorName,title:entry.title,body:entry.body,is_private:!!entry.is_private,created_at:new Date(entry.createdAt).toISOString(),updated_at:new Date(entry.updatedAt).toISOString()});
+    if(error)throw error;
+  }
+}
+
 function createState(input) {
   const campaign = {
     title: text(input.title, 100), system: text(input.system, 80), gmName: text(input.gmName, 80) || "Mestre",
@@ -88,9 +90,9 @@ function createState(input) {
     campaign,
     modules: { agenda: true, system: true, characters: true, lore: true, npcs: true, handouts: true, maps: true, music: true, diary: true, sessions: true, gmDocs: true, pdfs: true, library: true },
     players: [], appointments: campaign.date ? [{ id: id(6), title: "Sessão 1", date: campaign.date, time: campaign.time, location: campaign.location, notes: "" }] : [],
-    systemGuide: { text: "" }, gmShield: { notes: "", tracker: { chaos: 0, fear: 0, rolls: [] } }, lore: { text: "" }, npcs: [], handouts: [], gmDocs: [], pdfs: [],
+    systemGuide: { text: "", consultations: [] }, gmShield: { notes: "", tracker: { chaos: 0, fear: 0, rolls: [] } }, lore: { text: "" }, npcs: [], handouts: [], gmDocs: [], pdfs: [],
     map: { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: 5 },
-    music: { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65 },
+    music: { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65, loop: false, shuffle: false },
     notes: { shared: "", private: {} }, journal: [], sessions: []
   };
 }
@@ -100,7 +102,7 @@ function normalizeState(input) {
   return {
     ...base, ...state, campaign: { ...base.campaign, ...campaign }, modules: { ...base.modules, ...(state.modules || {}) },
     players: Array.isArray(state.players) ? state.players : [], appointments: Array.isArray(state.appointments) ? state.appointments : [],
-    systemGuide: state.systemGuide || { text: "" }, gmShield: { ...(base.gmShield || { notes: "" }), ...(state.gmShield || {}), tracker: { ...(base.gmShield?.tracker || { chaos: 0, fear: 0, rolls: [] }), ...(state.gmShield?.tracker || {}) } }, lore: state.lore || { text: "" }, npcs: Array.isArray(state.npcs) ? state.npcs : [],
+    systemGuide: { text: state.systemGuide?.text || "", consultations: Array.isArray(state.systemGuide?.consultations) ? state.systemGuide.consultations : [] }, gmShield: { ...(base.gmShield || { notes: "" }), ...(state.gmShield || {}), tracker: { ...(base.gmShield?.tracker || { chaos: 0, fear: 0, rolls: [] }), ...(state.gmShield?.tracker || {}) } }, lore: state.lore || { text: "" }, npcs: Array.isArray(state.npcs) ? state.npcs : [],
     handouts: Array.isArray(state.handouts) ? state.handouts : [], gmDocs: Array.isArray(state.gmDocs) ? state.gmDocs : [],
     pdfs: Array.isArray(state.pdfs) ? state.pdfs : [], journal: Array.isArray(state.journal) ? state.journal : [],
     map: { ...base.map, ...(state.map || {}), tokens: Array.isArray(state.map?.tokens) ? state.map.tokens : [], measurements: Array.isArray(state.map?.measurements) ? state.map.measurements : [] },
@@ -120,12 +122,12 @@ function publicState(room, socketData) {
   return {
     id: room.id, campaign: state.campaign, modules: state.modules,
     players: isGM || state.modules.characters ? players : players.filter(player => player.id === socketData.userId),
-    systemGuide: isGM || state.modules.system ? state.systemGuide : { text: "" }, gmShield: isGM ? state.gmShield : { notes: "" },
+    systemGuide: isGM || state.modules.system ? (isGM ? state.systemGuide : { ...state.systemGuide, consultations: state.systemGuide.consultations.filter(row => row.active) }) : { text: "", consultations: [] }, gmShield: isGM ? state.gmShield : { notes: "" },
     lore: isGM || state.modules.lore ? state.lore : { text: "" },
     npcs: isGM ? state.npcs : state.modules.npcs ? state.npcs.filter(npc => npc.public) : [],
     handouts: isGM ? state.handouts : state.modules.handouts ? state.handouts.filter(item => item.revealed) : [],
     map: isGM || (state.modules.maps && state.map.visible) ? state.map : { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: state.map.gridFeet },
-    music: isGM || state.modules.music ? state.music : { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65 },
+    music: isGM || state.modules.music ? { ...state.music, serverTime: Date.now() } : { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65, loop: false, shuffle: false },
     notes: isGM || state.modules.diary ? { shared: state.notes.shared, private: ownPrivate } : { shared: "", private: "" },
     journal: isGM ? state.journal : state.modules.diary ? state.journal.filter(item => !(item.is_private ?? (item.visibility === "private")) || (item.authorId || item.author_id) === socketData.userId) : [],
     gmDocs: isGM && state.modules.gmDocs ? state.gmDocs : [],
@@ -170,7 +172,10 @@ function applyAction(room, socket, action) {
       break;
     }
     case "module:set": requireGM(socket); if (!moduleKey(payload.key)) throw new Error("Módulo inválido."); state.modules[payload.key] = Boolean(payload.enabled); break;
-    case "system:update": requireGM(socket); state.systemGuide.text = text(payload.value, 30000); break; case "gm:shield:update": requireGM(socket); state.gmShield.notes = text(payload.value, 30000); break;
+    case "system:update": requireGM(socket); state.systemGuide.text = text(payload.value, 30000); break;
+    case "system:consultation:save": { requireGM(socket); const item = {id: text(payload.id,60) || id(6), title: text(payload.title,100) || 'Consulta', body: text(payload.body,30000), active: payload.active !== false, updatedAt: Date.now()}; if (!item.body) throw new Error('Preencha a consulta.'); const index = state.systemGuide.consultations.findIndex(row=>row.id===item.id); if(index<0) state.systemGuide.consultations.unshift(item); else state.systemGuide.consultations[index] = item; break; }
+    case "system:consultation:delete": requireGM(socket); state.systemGuide.consultations = state.systemGuide.consultations.filter(row=>row.id!==payload.id); break;
+    case "system:consultation:toggle": requireGM(socket); {const row=state.systemGuide.consultations.find(item=>item.id===payload.id); if(row) row.active=Boolean(payload.active);} break; case "gm:shield:update": requireGM(socket); state.gmShield.notes = text(payload.value, 30000); break;
     case "gm:tracker:update": { requireGM(socket); const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }, key=payload.key==="fear"?"fear":"chaos", limit=key==="fear"?12:999; tracker[key]=Math.min(limit,Math.max(0,Math.trunc(Number(payload.value)||0))); break; }
     case "dice:record": { const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }; let summary="",system=text(payload.system,40),actor=text(payload.actor,80); if(system!==state.campaign.system) throw new Error("A rolagem não corresponde ao sistema desta mesa."); if(system==="Triangle Agency"){ const dice=Array.isArray(payload.dice)?payload.dice.slice(0,6).map(Number):[]; if(dice.length!==6||dice.some(value=>!Number.isInteger(value)||value<1||value>4)) throw new Error("A rolagem de Triangle Agency precisa ter seis d4."); const threes=dice.filter(value=>value===3).length,triscendence=threes===3,chaos=triscendence?0:6-threes; tracker.chaos=Math.min(999,(Number(tracker.chaos)||0)+chaos); summary=triscendence?"Triscendência · sem Caos":threes+" sucesso(s) · +"+chaos+" Caos"; } else if(system==="Daggerheart"){ const hope=Number(payload.hopeDie),fear=Number(payload.fearDie); if(!Number.isInteger(hope)||!Number.isInteger(fear)||hope<1||hope>12||fear<1||fear>12) throw new Error("Informe os dois resultados de d12."); const critical=hope===fear,withFear=fear>hope; if(!critical&&withFear) tracker.fear=Math.min(12,(Number(tracker.fear)||0)+1); summary=critical?"Crítico":withFear?"Resultado com Medo · +1 Medo":"Resultado com Esperança"; } else throw new Error("Sistema de rolagem não suportado."); tracker.rolls=([{id:id(6),system,actor,summary,createdAt:Date.now()},...(tracker.rolls||[])]).slice(0,30); break; }
     case "lore:update": requireGM(socket); state.lore.text = text(payload.value, 30000); break;
@@ -205,7 +210,15 @@ function applyAction(room, socket, action) {
     case "music:playlist": requireGM(socket); state.music.playlist = (Array.isArray(payload.tracks) ? payload.tracks : []).slice(0, 40).map(track => ({ id: text(track.id, 60) || id(5), title: text(track.title, 100), url: text(track.url, 600) })).filter(track => /^https:\/\/\S+$/i.test(track.url)); if (!state.music.playlist.some(track => track.id === state.music.currentId)) { state.music.currentId = state.music.playlist[0] ? state.music.playlist[0].id : ""; state.music.playing = false; state.music.position = 0; } break;
     case "music:control": requireGM(socket); {
       const trackId = text(payload.trackId, 60); if (trackId && !state.music.playlist.some(track => track.id === trackId)) throw new Error("A faixa não está na playlist.");
-      state.music.currentId = trackId; state.music.playing = Boolean(payload.playing); state.music.position = Math.max(0, Number(payload.position) || 0); state.music.startedAt = state.music.playing ? Date.now() : 0; state.music.volume = Math.min(1, Math.max(0, Number(payload.volume ?? state.music.volume) || 0)); break;
+      state.music.currentId = trackId; state.music.playing = Boolean(payload.playing); state.music.position = Math.max(0, Number(payload.position) || 0); state.music.startedAt = state.music.playing ? Date.now() : 0; state.music.volume = Math.min(1, Math.max(0, Number(payload.volume ?? state.music.volume) || 0)); if (payload.loop !== undefined) state.music.loop = Boolean(payload.loop); if (payload.shuffle !== undefined) state.music.shuffle = Boolean(payload.shuffle); break;
+    }
+    case "profile:nickname": {
+      const name = text(payload.name, 60);
+      if (!name) throw new Error('Informe um apelido para a mesa.');
+      if (socket.data.role === 'gm') state.campaign.gmName = name;
+      else {const player=state.players.find(p=>p.id===socket.data.userId); if(!player) throw new Error('Jogador não encontrado.'); player.name=name;}
+      socket.data.name = name;
+      break;
     }
     case "character:save": {
       const targetId = socket.data.role === "gm" ? text(payload.ownerId, 60) : socket.data.userId, player = state.players.find(item => item.id === targetId);
@@ -233,7 +246,7 @@ function applyAction(room, socket, action) {
 }
 function fileIdentity(room, token) { return identify(room, token); }
 function fileExt(fileName, mime) { const ext = path.extname(fileName || "").toLowerCase(); if (ext) return ext.slice(0, 10); return mime === "application/pdf" ? ".pdf" : mime === "image/jpeg" ? ".jpg" : mime === "image/png" ? ".png" : mime === "image/webp" ? ".webp" : ".docx"; }
-function allowedMime(mime) { return ["image/png", "image/jpeg", "image/webp", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(mime); }
+function allowedMime(mime) { return ["image/png", "image/jpeg", "image/webp", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a"].includes(mime); }
 function persistUploadSession(session) {
   const serializable = { id: session.id, fingerprint: session.fingerprint, roomId: session.roomId, userId: session.userId, role: session.role, fileName: session.fileName, mime: session.mime, size: session.size, scope: session.scope, kind: session.kind, chunkCount: session.chunkCount, nextIndex: session.nextIndex, chunks: session.chunks, createdAt: session.createdAt, storageUploadUrl: session.storageUploadUrl || "", storagePath: session.storagePath || "" };
   const manifest = path.join(session.directory, "session.json"), temporary = manifest + ".tmp";
@@ -343,6 +356,41 @@ function signedUrl(bucket, filePath) { return supabase ? supabase.storage.from(b
 async function listLibrary() { return communityLibraryRepository.list(); }
 const libraryShape = row => { const bucket = row.bucket, filePath = row.file_path || row.path; const url = supabase ? supabase.storage.from(bucket).getPublicUrl(filePath).data.publicUrl : "/files/" + bucket + "/" + filePath.split("/").map(encodeURIComponent).join("/"); return { id: row.id, title: row.title, system: row.system, uploader: row.uploader, bucket, path: filePath, fileName: row.file_name || row.fileName, createdAt: row.created_at || row.createdAt, url }; };
 app.get("/api/health", (_req, res) => res.json({ ok: true, storage: cloud ? "supabase" : "local" }));
+
+async function accountUser(req) {
+  if (!supabase) throw new Error('Supabase não configurado no servidor.');
+  const token = String(req.headers.authorization || '').match(/^Bearer (.+)$/i)?.[1];
+  if (!token) {const error = new Error('Faça login para continuar.'); error.status = 401; throw error;}
+  const {data, error}=await supabase.auth.getUser(token);
+  if (error || !data.user) {const failure = new Error('Sessão inválida. Entre novamente.'); failure.status=401; throw failure;}
+  return data.user;
+}
+app.post('/api/account/link-room', async (req,res) => {
+  try {
+    const user=await accountUser(req), room=await readRoom(text(req.body?.roomId,30));
+    const token=text(req.body?.roomToken,100), actor=room && identify(room,token);
+    if(!actor) return res.status(403).json({error:'Credencial da mesa inválida.'});
+    const {error}=await supabase.from('account_rooms').upsert({user_id:user.id,room_id:room.id,room_token:token,role:actor.role,display_name:actor.name},{onConflict:'user_id,room_id'});
+    if(error)throw error;
+    res.json({ok:true});
+  } catch(error){res.status(error.status || 500).json({error:error.message});}
+});
+app.get('/api/account/rooms', async (req,res) => {
+  try {
+    const user=await accountUser(req);
+    const {data,error}=await supabase.from('account_rooms').select('room_id,room_token,role,display_name').eq('user_id',user.id);
+    if(error)throw error;
+    const rooms=[];
+    for(const member of data || []) {
+      const room=await readRoom(member.room_id);
+      const actor=room && identify(room,member.room_token);
+      if (!actor)continue;
+      rooms.push({meta:{id:room.id,title:room.state.campaign.title,system:room.state.campaign.system,status:room.state.campaign.status,role:actor.role,name:actor.name,inviteToken:actor.role==='gm'?room.inviteToken:undefined},credentials:{roomId:room.id,token:member.room_token,role:actor.role,userId:actor.userId,name:actor.name}});
+    }
+    res.json({rooms});
+  } catch(error){res.status(error.status || 500).json({error:error.message});}
+});
+
 app.post("/api/rooms", async (req, res) => {
   try {
     const input = req.body || {}, title = text(input.title, 100);
@@ -376,8 +424,8 @@ app.post("/api/rooms/:roomId/uploads/start", async (req, res) => {
     if (scope === "private" && actor.role !== "gm" && kind !== "character") return res.status(403).json({ error: "Documentos privados são exclusivos do Mestre." });
     if (scope === "public" && actor.role !== "gm" && kind !== "character") return res.status(403).json({ error: "Apenas o Mestre pode enviar materiais da campanha." });
     const fileName = text(input.fileName, 220) || "arquivo", mime = text(input.mime, 160), size = Math.trunc(Number(input.size));
-    if (!allowedMime(mime)) return res.status(415).json({ error: "Formato não suportado. Use PNG, JPG, WebP, PDF ou DOCX." });
-    if (!Number.isSafeInteger(size) || size < 1 || size > uploadMaxSize) return res.status(413).json({ error: "O arquivo deve ter até 150 MiB." });
+    if (!allowedMime(mime)) return res.status(415).json({ error: "Formato não suportado. Use PNG, JPG, WebP, PDF, DOCX ou áudio." });
+    if (!Number.isSafeInteger(size) || size < 1 || size > uploadMaxSize || (mime.startsWith("image/") && size > 30 * 1024 * 1024)) return res.status(413).json({ error: "Imagens: até 30 MB; PDFs: até 30 MB." });
     const fingerprint = [room.id, actor.userId, fileName, size, Math.trunc(Number(input.lastModified) || 0), mime, scope, kind].join("|");
     const existing = [...uploadSessions.values()].find(session => session.fingerprint === fingerprint);
     if (existing && Date.now() - existing.createdAt > 6 * 60 * 60 * 1000) { fs.rmSync(existing.directory, { recursive: true, force: true }); uploadSessions.delete(existing.id); }
@@ -435,8 +483,8 @@ app.post("/api/rooms/:roomId/uploads", express.raw({ type: "*/*", limit: "151mb"
     if (scope === "public" && actor.role !== "gm" && req.query.kind !== "character") return res.status(403).json({ error: "Apenas o Mestre pode enviar materiais da campanha." });
     const mime = text(req.headers["content-type"], 160).split(";")[0], fileName = decodeURIComponent(text(req.headers["x-file-name"], 220) || "arquivo");
     const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    if (!allowedMime(mime)) return res.status(415).json({ error: "Formato não suportado. Use PNG, JPG, WebP, PDF ou DOCX." });
-    if (!buffer.length || buffer.length > uploadMaxSize) return res.status(413).json({ error: "O arquivo deve ter até 150 MiB." });
+    if (!allowedMime(mime)) return res.status(415).json({ error: "Formato não suportado. Use PNG, JPG, WebP, PDF, DOCX ou áudio." });
+    if (!buffer.length || buffer.length > uploadMaxSize) return res.status(413).json({ error: "O arquivo deve ter até 30 MB." });
     const saved = await storeFile(room, actor, buffer, fileName, mime, scope);
     res.json(saved);
   } catch (error) { res.status(500).json({ error: error.message || "Não foi possível enviar o arquivo." }); }
@@ -498,7 +546,7 @@ io.on("connection", socket => {
     const ack = typeof callback === "function" ? callback : () => {};
     const previous = actionQueues.get(roomId) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
-      try { const latest = await readRoom(roomId); if (!latest) throw new Error("Sala encerrada."); applyAction(latest, socket, action); await saveRoom(latest); await broadcastRoom(roomId); ack({ ok: true }); }
+      try { const latest = await readRoom(roomId); if (!latest) throw new Error("Sala encerrada."); applyAction(latest, socket, action); await saveRoom(latest); await synchronizeJournal(latest, action); await broadcastRoom(roomId); if(['music:control','music:playlist'].includes(action?.type))publishAudio(roomId,latest.state.music); if(action?.type==='profile:nickname') await roomPresence(roomId); ack({ ok: true }); }
       catch (error) { ack({ ok: false, error: error.message || "Não foi possível salvar." }); }
     });
     actionQueues.set(roomId, pending);
