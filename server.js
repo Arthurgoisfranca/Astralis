@@ -32,6 +32,26 @@ if (!cloud) {
 const roomRepository = new RoomRepository({ supabase, db });
 const communityLibraryRepository = new CommunityLibraryRepository({ supabase, db });
 const app = express();
+// Render termina TLS no proxy. Confiar somente no primeiro proxy da plataforma.
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+  app.use((req, res, next) => {
+    // A conexão entre proxy e Node pode ser HTTP; o navegador sempre deve usar HTTPS.
+    if (!req.secure) return res.redirect(308, `https://${req.get("host")}${req.originalUrl}`);
+    next();
+  });
+  app.use((req, res, next) => {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    next();
+  });
+}
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Frame-Options", "DENY");
+  next();
+});
 const allowedOrigins = (process.env.CORS_ORIGIN || "").split(",").map(origin => origin.trim()).filter(Boolean); const corsOptions = { origin: (origin, callback) => callback(null, !origin || !allowedOrigins.length || allowedOrigins.includes(origin)), credentials: true }; app.use(cors(corsOptions));
 app.use(express.json({ limit: "35mb" }));
 const server = http.createServer(app);

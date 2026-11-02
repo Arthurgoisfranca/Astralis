@@ -91,3 +91,18 @@ Depois de executar `supabase/migrations/20261031_init.sql`, aplique `supabase/mi
 Este projeto ainda não usa Supabase Auth. Por isso, as políticas não usam `auth.uid()`; a identidade é o token de sala validado pelo backend, que também aplica as permissões do Mestre, do autor do diário e das anotações privadas. Não exponha `SUPABASE_SECRET_KEY` ao navegador.
 
 Os blocos temporários e o manifesto do envio ficam em `data/upload-chunks/`, com validade de seis horas. O servidor verifica os hashes ao iniciar e retoma as partes ainda pendentes. Em ambiente local, reserve espaço em disco suficiente para o arquivo; no Supabase, aumente também o limite global de uploads do projeto para pelo menos 150 MiB. Em produção, monte um volume persistente em `DATA_DIR` para preservar os blocos temporários durante reinícios. O navegador envia blocos de 5 MiB ao Astralis; para arquivos acima de 6 MiB, o backend encaminha os dados ao Supabase pelo protocolo TUS em blocos de 6 MiB.
+
+## Publicação com HTTPS (Render)
+
+O arquivo `render.yaml` configura um serviço Web Node (frontend Vite + API Express + Socket.IO) no Render. O Render termina TLS e publica o aplicativo em `https://<nome-do-servico>.onrender.com`, com certificado HTTPS gerenciado pela plataforma. O servidor redireciona solicitações HTTP recebidas pelo proxy para HTTPS quando `NODE_ENV=production`, envia HSTS e cabeçalhos básicos de segurança.
+
+1. Faça push deste código para um repositório GitHub privado ou público **sem `.env`**.
+2. No Render, selecione **New > Blueprint**, conecte o repositório e confirme o `render.yaml`. Consulte os limites e a disponibilidade do plano gratuito no momento da criação.
+3. Configure as variáveis privadas `SUPABASE_URL` e `SUPABASE_SECRET_KEY` no painel do Render. **Jamais exponha a chave secreta em variáveis `VITE_`**.
+4. Prepare o Supabase executando, na ordem, as migrações em `supabase/migrations/` e criando os buckets conforme as instruções do projeto. O serviço precisa de Supabase configurado para persistência pública; `/tmp/mesa` no plano gratuito é armazenamento efêmero.
+5. Aguarde o serviço ficar saudável em `/api/health` e acesse `https://<nome-do-servico>.onrender.com` no navegador. Verifique o cadeado e teste uma sessão com dois dispositivos e redes diferentes.
+6. Para domínio personalizado, cadastre o domínio no Render, configure os registros DNS informados por ele e mantenha o certificado automático ativo.
+
+**Importante:** o Render lida com TLS no proxy, por isso `server.js` continua criando `http.createServer()` internamente — isto é esperado e não significa HTTP público. Use um único domínio para frontend, API e Socket.IO, de preferência deixando `VITE_API_URL` e `VITE_SOCKET_URL` sem valor. O Socket.IO utiliza WSS quando o site é acessado via HTTPS.
+
+**Segurança ainda pendente:** HTTPS não é autenticação. Esta base usa tokens de sala, não Supabase Auth; a implantação em produção deve considerar políticas de acesso, proteção contra abuso e migração para autenticação de contas. Revise as permissões de arquivos antes de compartilhar publicamente. O plano gratuito pode suspender o serviço por inatividade e não garante disponibilidade contínua.
