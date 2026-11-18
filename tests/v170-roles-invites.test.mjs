@@ -103,3 +103,26 @@ test('R3: remover participante desconecta, libera vaga e mantém a ficha', async
     assert.equal(after.campaign.availableSeats, 5);
   } finally { gmSocket.disconnect(); }
 });
+
+test('bloco d: só gestor salva a ficha da mesa; jogador preenche e rola campo', async () => {
+  const gm = await createRoom();
+  const gmSocket = await connect(gm.room.id, gm.token); await gmSocket.firstState;
+  try {
+    const player = (await join(gm.room.id, gm.room.inviteToken, 'Jog')).body;
+    const playerSocket = await connect(gm.room.id, player.token); await playerSocket.firstState;
+    try {
+      const template = { name: 'Teste', sections: [{ title: 'Atributos', fields: [{ key: 'forca', label: 'Força', type: 'atributo', roll: '1d20+{forca}' }] }] };
+      assert.equal((await act(playerSocket, 'customSheet:save', { template })).ok, false); // jogador não edita template
+      assert.equal((await act(gmSocket, 'customSheet:save', { template })).ok, true);
+      const state = await connect(gm.room.id, gm.token).then(async s => { const st = await s.firstState; s.disconnect(); return st; });
+      assert.equal(state.customSheet.version, 1);
+      assert.equal(state.customSheet.sections[0].fields[0].key, 'forca');
+      // jogador salva a própria ficha "Outros"
+      assert.equal((await act(playerSocket, 'character:save', { character: { name: 'Herói', stats: { forca: '15' }, sheet: { system: 'Outros', templateVersion: 1 } } })).ok, true);
+      // rolagem de campo via expression
+      const rolled = await emit(playerSocket, 'dice:roll', { kind: 'expression', params: { expression: '1d20+15' } });
+      assert.equal(rolled.ok, true);
+      assert.ok(rolled.result.total >= 16 && rolled.result.total <= 35);
+    } finally { playerSocket.disconnect(); }
+  } finally { gmSocket.disconnect(); }
+});

@@ -11,7 +11,8 @@ export const SYSTEMS = [
   "Triangle Agency",
   "Sacramento",
   "Assimilação RPG",
-  "Cairn 2e"
+  "Cairn 2e",
+  "Outros"
 ];
 
 const dndFields = [
@@ -312,6 +313,15 @@ const profiles = {
       {title:"Inventário",items:[["Capacidade","10 espaços, 4 confortáveis; miudezas 0, volumosos 2."],["Fadiga","Ocupa espaço; Privação por mais de um dia acrescenta Fadiga a cada dia."]]},
       {title:"Combate",items:[["Ataques","Acertam automaticamente; role dano da arma e subtraia a Armadura (máximo 3)."],["Dano","PG → FOR; atingir exatamente 0 PG consulta Cicatrizes conforme quantidade perdida."]]}
     ]}
+  },
+  "Outros": {
+    fields: [["conceito", "Conceito"]],
+    shield: {
+      source: "SISTEMA PERSONALIZADO",
+      scope: "A mesa usa uma ficha universal montada pelo Mestre na aba Fichas.",
+      notice: "O construtor de ficha, as fórmulas e as rolagens vinculadas ficam na aba Fichas quando o sistema é Outros.",
+      sections: []
+    }
   },
   "Assimilação RPG": {
     fields: [["vigor", "Vigor"], ["integridade", "Integridade"], ["recurso", "Recurso"], ["arquetipo", "Arquétipo"], ["progresso", "Progresso"], ["condicoes", "Condições"]],

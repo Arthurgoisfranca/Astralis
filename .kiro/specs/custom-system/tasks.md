@@ -1,0 +1,23 @@
+# Tarefas — sistema "Outros" (bloco d)
+
+- [x] 1. Domínio: `src/domain/customSheet.mjs`
+  - `evalFormula` seguro (tokenizer + parser, sem eval); `normalizeTemplate`, `validateTemplate`; `CUSTOM_TEMPLATES` (em branco, d20 básico)
+  - Teste unitário de fórmula e validação
+  - _Req: R2.4, R2.5, R4.3, R4.4_
+- [x] 2. Servidor
+  - `"Outros"` aceito como sistema; `normalizeState` default `customSheet`; ação `customSheet:save` (requireGM) com `normalizeTemplate` e `version++`
+  - Teste de integração: gestor salva, jogador não
+  - _Req: R1.1, R2.1, R4.1, R5.2_
+- [x] 3. Lista de sistemas
+  - `"Outros"` em `SYSTEMS` e `systemProfile` com escudo genérico
+  - _Req: R1.1_
+- [x] 4. Renderizador `src/CustomSheet.jsx`
+  - Preenche campos por tipo; campos calculados mostram resultado/aviso; campo com rolagem chama `roll("expression")`
+  - Integra na aba Fichas quando sistema = "Outros"
+  - _Req: R1.2, R3.1, R3.2, R5.1_
+- [x] 5. Construtor (mestre)
+  - Criar/editar/remover seções e campos; arrastar e soltar; fórmula e rolagem; exportar/importar JSON; escolher modelo
+  - _Req: R2.1, R2.2, R2.3, R4.2, R4.3, R4.4_
+- [x] 6. Checkpoint
+  - `npm run check` limpo; smoke; atualizar diagnóstico
+  - _Req: P1–P4_

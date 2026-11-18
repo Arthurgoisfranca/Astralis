@@ -10,8 +10,12 @@ const { Server } = require("socket.io");
 const { RoomRepository } = require("./server/repositories/roomRepository");
 const { CommunityLibraryRepository } = require("./server/repositories/communityLibraryRepository");
 const { contentMatchesMime, extensionFor, safeStoragePath, uploadAllowed } = require("./server/fileSecurity");
+let customSheet = null;
 let dice = null;
-const diceReady = import("./src/domain/serverDice.mjs").then(module => { dice = module; });
+const diceReady = Promise.all([
+  import("./src/domain/serverDice.mjs").then(module => { dice = module; }),
+  import("./src/domain/customSheet.mjs").then(module => { customSheet = module; }),
+]);
 const secureRandom = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
 
 const port = Number(process.env.PORT || 3001);
@@ -124,7 +128,8 @@ function normalizeState(input) {
     map: { ...base.map, ...(state.map || {}), tokens: Array.isArray(state.map?.tokens) ? state.map.tokens : [], measurements: Array.isArray(state.map?.measurements) ? state.map.measurements : [] },
     music: { ...base.music, ...(state.music || {}) }, notes: { ...base.notes, ...(state.notes || {}), private: { ...(state.notes?.private || {}) } },
     sessions: Array.isArray(state.sessions) ? state.sessions : [],
-    invites: (Array.isArray(state.invites) ? state.invites : []).map(normalizeInvite).filter(Boolean)
+    invites: (Array.isArray(state.invites) ? state.invites : []).map(normalizeInvite).filter(Boolean),
+    customSheet: state.customSheet && typeof state.customSheet === "object" ? state.customSheet : null
   };
 }
 function normalizeInvite(raw) {
@@ -174,6 +179,7 @@ function publicState(room, socketData) {
     sessions: isGM || state.modules.sessions ? state.sessions : [],
     appointments: isGM || state.modules.agenda ? state.appointments : [],
     invites: isGM ? (state.invites || []) : [],
+    customSheet: state.customSheet || null,
     role: socketData.role, userId: socketData.userId, name: socketData.name
   };
 }
@@ -302,6 +308,12 @@ function applyAction(room, socket, action) {
       break;
     }
     case "invite:revoke": { requireOwner(socket); const invite = (state.invites || []).find(item => item.token === payload.token); if (invite) invite.revoked = true; break; }
+    case "customSheet:save": {
+      requireGM(socket);
+      const next = customSheet.normalizeTemplate(payload.template || {});
+      next.version = (Number(state.customSheet?.version) || 0) + 1;
+      state.customSheet = next; break;
+    }
     case "member:role": {
       requireOwner(socket);
       const member = manageableMember(state, text(payload.id, 60));
