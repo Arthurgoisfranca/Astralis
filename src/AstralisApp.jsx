@@ -176,7 +176,7 @@ function App({user, accountClient, openProfile}) {
     const connection = socketRef.current;
     if (!connection?.connected) return Promise.reject(new Error("Sem conexão com a mesa. A rolagem não foi feita."));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("O servidor não respondeu. A rolagem não foi feita.")), 8000);
+      const timer = setTimeout(() => reject(new Error("O servidor não respondeu a tempo e o resultado não chegou. Confira o Escudo do Mestre antes de rolar de novo.")), 8000);
       connection.emit("dice:roll", { kind, params }, response => {
         clearTimeout(timer);
         if (response?.ok) resolve(response); else reject(new Error(response?.error || "A rolagem não foi feita."));

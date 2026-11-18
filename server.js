@@ -189,13 +189,6 @@ function applyAction(room, socket, action) {
     case "system:consultation:delete": requireGM(socket); state.systemGuide.consultations = state.systemGuide.consultations.filter(row=>row.id!==payload.id); break;
     case "system:consultation:toggle": requireGM(socket); {const row=state.systemGuide.consultations.find(item=>item.id===payload.id); if(row) row.active=Boolean(payload.active);} break; case "gm:shield:update": requireGM(socket); state.gmShield.notes = text(payload.value, 30000); break;
     case "gm:tracker:update": { requireGM(socket); const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }, key=payload.key==="fear"?"fear":"chaos", limit=key==="fear"?12:999; tracker[key]=Math.min(limit,Math.max(0,Math.trunc(Number(payload.value)||0))); break; }
-    case "dice:record": {
-      // Clientes antigos: os valores enviados são ignorados e a rolagem é sorteada aqui.
-      const system = state.campaign.system, kind = system === "Triangle Agency" ? "triangle" : system === "Daggerheart" ? "daggerheart" : "";
-      if (!kind) throw new Error("Sistema de rolagem não suportado.");
-      recordRoll(state, system, socket.data.name, dice.resolveRoll({ kind, params: payload }, secureRandom));
-      break;
-    }
     case "lore:update": requireGM(socket); state.lore.text = text(payload.value, 30000); break;
     case "npc:save": {
       requireGM(socket); if (!text(payload.name, 80)) throw new Error("Informe o nome do NPC.");
@@ -278,6 +271,10 @@ function recordRoll(state, system, actor, result) {
   tracker.rolls = ([{ id: id(6), system, actor: text(actor, 80), summary, dice: result.dice, createdAt: Date.now() }, ...(tracker.rolls || [])]).slice(0, 30);
 }
 function fileIdentity(room, token) { return identify(room, token); }
+function readFileHead(file, length = 64) {
+  try { const handle = fs.openSync(file, "r"); try { const buffer = Buffer.alloc(length); return buffer.subarray(0, fs.readSync(handle, buffer, 0, length, 0)); } finally { fs.closeSync(handle); } }
+  catch (_) { return Buffer.alloc(0); }
+}
 function uploadDeniedMessage(role, scope) {
   if (scope === "community") return "A biblioteca aceita somente PDF.";
   if (role === "gm") return "Formato não suportado.";
@@ -513,6 +510,10 @@ app.post("/api/rooms/:roomId/uploads/:uploadId/complete", async (req, res) => {
   const session = uploadSessions.get(req.params.uploadId), room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
   if (!room || !actor || !session || session.roomId !== room.id || session.userId !== actor.userId) return res.status(404).json({ error: "Envio não encontrado." });
   if (session.nextIndex !== session.chunkCount || session.chunks.reduce((sum, chunk) => sum + chunk.size, 0) !== session.size) return res.status(409).json({ error: "Ainda faltam blocos para concluir o envio." });
+  // Sessões retomadas do disco podem ser anteriores às regras atuais: confere papel e conteúdo de novo.
+  const rejectSession = (status, error) => { fs.rmSync(session.directory, { recursive: true, force: true }); uploadSessions.delete(session.id); return res.status(status).json({ error }); };
+  if (!uploadAllowed(session.role, session.scope, session.mime)) return rejectSession(403, uploadDeniedMessage(session.role, session.scope));
+  if (!contentMatchesMime(readFileHead(path.join(session.directory, "0.part")), session.mime)) return rejectSession(415, "O conteúdo do arquivo não corresponde ao formato informado.");
   try {
     let saved;
     if (supabase && session.size > tusChunkSize) saved = await uploadLargeFileToStorage(room, actor, session);
@@ -571,14 +572,26 @@ app.get("/api/rooms/:roomId/private-file", async (req, res) => {
     }
     const root = path.resolve(dataDir, "uploads", buckets.private), absolute = path.resolve(root, ...filePath.split("/"));
     if (!absolute.startsWith(root + path.sep) || !fs.existsSync(absolute)) return res.status(404).end();
-    uploadedFileHeaders(res); res.sendFile(absolute);
+    uploadedFileHeaders(res, absolute); res.sendFile(absolute);
   } catch (_) { res.status(404).end(); }
 });
-const uploadedFileHeaders = res => { res.setHeader("X-Content-Type-Options", "nosniff"); res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox"); };
+// PDFs ficam sem "sandbox": o visualizador do Chrome não abre documentos com esse CSP.
+// O conteúdo já foi verificado e a extensão .pdf foi escolhida pelo servidor.
+function uploadedFileHeaders(res, filePath) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  if (path.extname(String(filePath || "")).toLowerCase() !== ".pdf") res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+}
 app.use("/files/" + buckets.public, express.static(path.join(dataDir, "uploads", buckets.public), { setHeaders: uploadedFileHeaders }));
 app.use("/files/" + buckets.community, express.static(path.join(dataDir, "uploads", buckets.community), { setHeaders: uploadedFileHeaders }));
 app.use(express.static(path.join(__dirname, "dist")));
 app.use((req, res, next) => { if (req.path.startsWith("/api/")) return next(); res.sendFile(path.join(__dirname, "dist", "index.html")); });
+// Erros do parser de corpo (tamanho, JSON malformado) em JSON, sem detalhes internos.
+app.use((error, _req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (error?.type === "entity.too.large") return res.status(413).json({ error: "O arquivo deve ter até 30 MB." });
+  if (error?.type === "entity.parse.failed") return res.status(400).json({ error: "Requisição inválida." });
+  res.status(error?.status || 500).json({ error: "Não foi possível concluir a requisição." });
+});
 
 io.use(async (socket, next) => {
   try {

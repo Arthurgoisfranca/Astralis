@@ -9,9 +9,8 @@ const STEP_DICE = [4, 6, 8, 10, 12, 20];
 const FREE_DICE = [4, 6, 8, 10, 12, 20, 100];
 
 function int(value, min, max, label) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || !Number.isInteger(Math.trunc(n))) throw new Error(`${label}: informe um número.`);
-  const v = Math.trunc(n);
+  const v = typeof value === "string" && value.trim() === "" ? NaN : Number(value);
+  if (!Number.isInteger(v)) throw new Error(`${label}: informe um número inteiro.`);
   if (v < min || v > max) throw new Error(`${label}: use um valor entre ${min} e ${max}.`);
   return v;
 }

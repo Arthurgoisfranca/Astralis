@@ -43,6 +43,33 @@ test('A3: permissão de upload pelo papel e pelo tipo, não pelo kind do cliente
   assert.equal(uploadAllowed('gm', 'private', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'), true);
   assert.equal(uploadAllowed('gm', 'public', 'text/html'), false);
 });
+test('A2: assinaturas de todos os formatos aceitos', () => {
+  const pad = (bytes, size = 16) => Buffer.concat([Buffer.from(bytes), Buffer.alloc(size)]);
+  const cases = [
+    ['image/jpeg', pad([0xff, 0xd8, 0xff, 0xe0])],
+    ['image/webp', pad([...Buffer.from('RIFF'), 0, 0, 0, 0, ...Buffer.from('WEBP')])],
+    ['audio/wav', pad([...Buffer.from('RIFF'), 0, 0, 0, 0, ...Buffer.from('WAVE')])],
+    ['audio/webm', pad([0x1a, 0x45, 0xdf, 0xa3])],
+    ['audio/mp4', pad([0, 0, 0, 0x20, ...Buffer.from('ftypM4A ')])],
+    ['audio/x-m4a', pad([0, 0, 0, 0x20, ...Buffer.from('ftypM4A ')])],
+    ['audio/mpeg', pad([...Buffer.from('ID3'), 4, 0])],
+    ['audio/mpeg', pad([0xff, 0xfb, 0x90, 0x64])],
+    ['audio/ogg', pad([...Buffer.from('OggS'), 0])],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', pad([0x50, 0x4b, 0x03, 0x04])],
+  ];
+  for (const [mime, buffer] of cases) {
+    assert.equal(contentMatchesMime(buffer, mime), true, mime);
+    assert.equal(contentMatchesMime(buffer, 'image/png'), false, mime + ' como PNG');
+  }
+});
+
+test('2.10.2.1: parâmetros não inteiros são recusados', () => {
+  assert.throws(() => resolveRoll({ kind: 'vampireV5', params: { pool: 2.9 } }, rng(0)), /inteiro/);
+  assert.throws(() => resolveRoll({ kind: 'free', params: { sides: 6, count: '1.5' } }, rng(0)), /inteiro/);
+  assert.throws(() => resolveRoll({ kind: 'cthulhu', params: { skill: '' } }, rng(0)), /inteiro/);
+  assert.equal(resolveRoll({ kind: 'free', params: { sides: 6, count: '2' } }, rng(0)).dice.length, 2);
+});
+
 test('A5: o servidor sorteia; parâmetros inválidos são recusados', () => {
   assert.deepEqual(resolveRoll({ kind: 'triangle' }, rng(0.51)).dice, [3, 3, 3, 3, 3, 3]);
   assert.equal(resolveRoll({ kind: 'dnd', params: { attributeScore: 14, proficiency: 2 } }, rng(0.5)).detail.startsWith('11 +2 atributo +2 proficiência'), true);
