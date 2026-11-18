@@ -1,28 +1,114 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CLASSES, SPELLS } from '../src/domain/dnd2024Catalog.mjs';
-import { BUILD_STAT, DATA_LIMIT, PLAY_STAT, buildDetails, changeHP, classEntry, demoGabriel, newAbilityRolls,
-  readBuild, readPlay, recover, rerollDndTest, resourceCaps, rollDamage, rollDndTest, skillBonus, storeCharacter } from '../src/domain/dnd2024Rules.mjs';
+import { BUILD_STAT, DATA_LIMIT, PLAY_STAT, buildDetails, changeHP, classEntry, demoGabriel, featureLevels, newAbilityRolls,
+  readBuild, readPlay, recover, rerollDndTest, resourceCaps, rollDamage, rollDndTest, skillBonus, spellChoices, storeCharacter } from '../src/domain/dnd2024Rules.mjs';
 
 function rng(...values) {
   let i = 0;
   return () => values[i++] ?? 0.5;
 }
 
-test('todas as 12 classes do SRD têm progressões e dados de vida até o nível 20', () => {
+test('as 12 classes têm progressões até o nível 20 e as 48 subclasses do Livro do Jogador 2024', () => {
   assert.equal(Object.keys(CLASSES).length, 12);
   assert.equal(new Set(Object.values(CLASSES).map(item => item.hitDie)).size, 4);
-  for (const entry of Object.values(CLASSES)) {
+  const subclassIds = new Set();
+  for (const [id, entry] of Object.entries(CLASSES)) {
     assert.equal(entry.rows.length, 20);
-    assert.ok(entry.subclass[0]);
+    assert.equal(entry.subclasses.length, 4);
+    for (const subclass of entry.subclasses) {
+      subclassIds.add(subclass.id);
+      const levels = featureLevels({ ...classEntry(id), subclass: subclass.id, level: 20 });
+      assert.ok(subclass.levels[3].length);
+      for (const [level, features] of Object.entries(subclass.levels)) {
+        assert.ok(features.every(feature => levels[Number(level) - 1].features.includes(feature)));
+      }
+      const tables = [subclass.spells ?? {}, ...Object.values(subclass.terrains ?? {})];
+      for (const table of tables) {
+        for (const spell of Object.values(table).flat()) assert.ok(SPELLS[spell], `${subclass.label} · ${spell}`);
+      }
+    }
     for (const row of entry.rows) assert.ok(row.features.every(feature => typeof feature === 'string'));
   }
+  assert.equal(subclassIds.size, 48);
   assert.equal(CLASSES.warlock.rows[16].pact, 4);
   assert.equal(CLASSES.fighter.rows[19].mastery, 6);
   assert.equal(CLASSES.monk.rows[9].focus, 10);
   assert.equal(CLASSES.wizard.rows[19].prepared, 25);
   assert.ok(SPELLS['Dancing Lights'].classes.includes('wizard'));
   assert.equal(SPELLS.Guidance.concentration, true);
+});
+
+test('as 391 magias têm dados de seleção e usam as chaves aceitas por fichas anteriores', () => {
+  assert.equal(Object.keys(SPELLS).length, 391);
+  assert.equal(new Set(Object.values(SPELLS).map(spell => spell.label)).size, 391);
+  for (const spell of Object.values(SPELLS)) {
+    assert.ok(spell.classes.length && spell.classes.every(id => Object.hasOwn(CLASSES, id)));
+    assert.match(spell.components, /^[VSM]+$/);
+    assert.ok(spell.range && spell.duration);
+  }
+  assert.equal(SPELLS.Bless.label, 'Bênção');
+  assert.equal(SPELLS.Fireball.label, 'Bola de Fogo');
+  assert.equal(SPELLS['Destruição Estrondosa'].level, 1);
+  assert.ok(SPELLS['Blade Barrier'].classes.includes('cleric'));
+});
+
+test('trocar subclasse, terreno ou nível atualiza magias concedidas e opções de preparo', () => {
+  const { build, spells, name } = demoGabriel();
+  build.classes[0] = { ...build.classes[0], level: 5, subclass: 'Light Domain' };
+  let details = buildDetails(build, spells, name);
+  assert.ok(details.granted.some(spell => spell.name === 'Fireball' && spell.source === 'Domínio da Luz'));
+  assert.ok(!details.groups.find(group => group.id === 'cleric:prepared').options.some(spell => spell.name === 'Fireball'));
+  assert.ok(details.groups.find(group => group.id === 'cleric:prepared').options.some(spell => spell.name === 'Simular Morte'));
+  build.classes[0].level = 4;
+  assert.ok(!spellChoices(build, 4).granted.some(spell => spell.name === 'Fireball'));
+  build.classes = [{ ...classEntry('druid'), level: 5, order: 'magician', subclass: 'Circle of the Land', terrain: 'Árido' }];
+  details = buildDetails(readBuild(JSON.stringify(build)), {}, name);
+  assert.ok(details.granted.some(spell => spell.name === 'Fireball'));
+  build.classes[0].terrain = 'Polar';
+  const granted = spellChoices(readBuild(JSON.stringify(build)), 5).granted.map(spell => spell.name);
+  assert.ok(granted.includes('Sleet Storm') && !granted.includes('Fireball'));
+  build.classes[0].terrain = '';
+  assert.match(buildDetails(build, {}, name).issues.Classe.join(' '), /terreno/);
+});
+
+test('Cavaleiro Místico e Trapaceiro Arcano têm conjuração própria e contam 1/3 na multiclasse', () => {
+  const { build, name } = demoGabriel();
+  const fighter = { ...classEntry('fighter'), subclass: 'Eldritch Knight', level: 4 };
+  build.classes = [fighter];
+  let details = buildDetails(build, { 'fighter:prepared': ['Shield'], 'fighter:cantrips': ['Fire Bolt'] }, name);
+  assert.deepEqual(details.slots, [3]);
+  assert.deepEqual(details.selected['fighter:prepared'], ['Shield']);
+  assert.equal(details.groups.find(group => group.id === 'fighter:prepared').ability, 'intelligence');
+  assert.equal(details.groups.find(group => group.id === 'fighter:prepared').count, 4);
+  assert.ok(!details.groups.find(group => group.id === 'fighter:prepared').options.some(spell => spell.name === 'Bless'));
+  build.classes.push({ ...classEntry('wizard'), level: 2 });
+  details = buildDetails(build, {}, name);
+  assert.deepEqual(details.slots.slice(0, 3), [4, 2, 0]);
+  assert.match(details.issues.Perícias.join(' '), /especializações/);
+  build.classes = [{ ...classEntry('rogue'), subclass: 'Arcane Trickster', level: 10 }];
+  details = buildDetails(build, { 'rogue:cantrips': ['Mage Hand', 'Message'] }, name);
+  assert.deepEqual(details.slots, [4, 3]);
+  assert.equal(details.groups.find(group => group.id === 'rogue:cantrips').count, 3);
+  assert.deepEqual(details.selected['rogue:cantrips'], ['Message']);
+  assert.ok(details.granted.some(spell => spell.name === 'Mage Hand'));
+});
+
+test('escolhas de classe adicionais persistem e entram nos cálculos', () => {
+  const { build, name } = demoGabriel();
+  build.classes = [{ ...classEntry('bard'), subclass: 'College of Lore', level: 6, loreSkills: ['Arcana', 'Medicine', 'Survival'] }];
+  let details = buildDetails(readBuild(JSON.stringify(build)), { 'bard:lore': ['Fireball', 'Guidance'] }, name);
+  assert.equal(details.skillGroups.find(group => group.id === 'bard:lore').values.length, 3);
+  assert.deepEqual(details.selected['bard:lore'], ['Fireball', 'Guidance']);
+  build.classes = [{ ...classEntry('paladin'), style: 'Blessed Warrior', level: 2 }];
+  details = buildDetails(build, { 'paladin:style': ['Guidance', 'Sacred Flame'] }, name);
+  assert.equal(details.groups.find(group => group.id === 'paladin:style').ability, 'charisma');
+  assert.deepEqual(details.selected['paladin:style'], ['Guidance', 'Sacred Flame']);
+  build.classes = [{ ...classEntry('fighter'), subclass: 'Battle Master', level: 10 }];
+  details = buildDetails(build, {}, name);
+  assert.deepEqual(resourceCaps(build, details).find(row => row.id === 'superiority'), {
+    id: 'superiority', name: 'Dados de Superioridade', max: 5, short: Infinity, die: 'd10',
+  });
 });
 
 test('Gabriel conclui a criação e ganha exatamente uma pendência de magia ao chegar ao nível 2', () => {

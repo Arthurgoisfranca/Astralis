@@ -1,10 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ABILITIES, ABILITY_KEYS, BACKGROUNDS, CLASSES, LANGUAGES, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, STYLES, TOOLS, WEAPONS } from './domain/dnd2024Catalog.mjs';
-import { BUILDER_STEPS, POINT_COST, STANDARD_ARRAY, classData, classEntry, featureLevels, isInnateCaster, masteryCapacity, newAbilityRolls, signedNumber, skillBonus } from './domain/dnd2024Rules.mjs';
+import { ABILITIES, ABILITY_KEYS, BACKGROUNDS, CLASSES, LANGUAGES, METAMAGIC, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, STYLES, TOOLS, WEAPONS, spellLabel } from './domain/dnd2024Catalog.mjs';
+import { BUILDER_STEPS, POINT_COST, STANDARD_ARRAY, blessedStrikes, classData, classEntry, featureLevels, fightingStyles, isInnateCaster,
+  masteryCapacity, metamagicCapacity, newAbilityRolls, sharesSpellChoices, signedNumber, skillBonus, subclassData } from './domain/dnd2024Rules.mjs';
 
 const ORIGIN_LABELS = { 'Magic Initiate (Cleric)': 'Iniciado em Magia (Clérigo)', 'Magic Initiate (Druid)': 'Iniciado em Magia (Druida)',
   'Magic Initiate (Wizard)': 'Iniciado em Magia (Mago)', Tough: 'Robusto', Alert: 'Alerta', Skilled: 'Habilidoso', 'Savage Attacker': 'Atacante Selvagem' };
 const LANGUAGES_AVAILABLE = LANGUAGES.filter(language => language !== 'Comum');
+const STYLE_LABELS = {
+  Archery: 'Arquearia', 'Blind Fighting': 'Combate às Cegas', Defense: 'Defesa', Dueling: 'Duelo',
+  'Great Weapon Fighting': 'Combate com Armas Grandes', Interception: 'Interceptação', Protection: 'Proteção',
+  'Thrown Weapon Fighting': 'Combate com Armas de Arremesso', 'Two-Weapon Fighting': 'Combate com Duas Armas',
+  'Unarmed Fighting': 'Combate Desarmado', 'Blessed Warrior': 'Combatente Abençoado', 'Druidic Warrior': 'Combatente Druídico',
+};
+const styleOptions = styles => styles.map(style => [style, STYLE_LABELS[style] ?? style]);
+const normalizeSearch = value => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const BACKGROUND_ROLLS = {
   alignment: ['Leal e Bom', 'Neutro e Bom', 'Caótico e Bom', 'Leal e Neutro', 'Neutro', 'Caótico e Neutro', 'Leal e Mau', 'Neutro e Mau', 'Caótico e Mau'],
   lifestyle: ['Miserável', 'Esquálido', 'Pobre', 'Modesto', 'Confortável', 'Rico', 'Aristocrático'],
@@ -48,8 +57,8 @@ function Multiple({ label, options, selected, limit, onChange }) {
 
 function Catalogue({ label, options, value, onChange }) {
   const [search, setSearch] = useState('');
-  const match = search.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  const shown = options.filter(([, name]) => name.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().includes(match));
+  const match = normalizeSearch(search.trim());
+  const shown = options.filter(([, name]) => normalizeSearch(name).includes(match));
   return <div className="dnd24-catalogue">
     <TextField label={`Buscar ${label}`} value={search} onChange={setSearch}/>
     <div className="dnd24-catalogue-grid">{shown.map(([id, name]) => <button type="button" key={id}
@@ -58,10 +67,33 @@ function Catalogue({ label, options, value, onChange }) {
   </div>;
 }
 
+function SubclassPreview({ subclasses, selected }) {
+  const [focused, setFocused] = useState('');
+  const subclass = subclasses.find(item => item.id === focused) ?? selected ?? subclasses[0];
+  const levels = [...new Set([...Object.keys(subclass.levels), ...Object.keys(subclass.spells ?? {})])].sort((a, b) => Number(a) - Number(b));
+  return <section className="dnd24-progression">
+    <h4>Subclasses</h4>
+    <div className="dnd24-subclass-list" role="group" aria-label="Consultar subclasses">
+      {subclasses.map(item => <button key={item.id} type="button" aria-pressed={item.id === subclass.id}
+        onClick={() => setFocused(item.id)}>{item.label}</button>)}
+    </div>
+    <div className="dnd24-subclass-preview">
+      <small>Livro do Jogador 2024 · p. {subclass.page} · escolha no nível 3</small>
+      {levels.map(level => <div key={level} className="dnd24-subclass-level">
+        <strong>Nível {level}</strong>
+        <div>{subclass.levels[level]?.join(' · ')}
+          {subclass.spells?.[level] && <small>Magias · {subclass.spells[level].map(spellLabel).join(' · ')}</small>}
+        </div>
+      </div>)}
+    </div>
+  </section>;
+}
+
 function ClassStage({ build, details, patch }) {
   const [preview, setPreview] = useState(build.classes[0]?.id || 'cleric');
   const selected = build.classes.find(entry => entry.id === preview);
   const data = classData(selected ?? classEntry(preview));
+  const subclass = subclassData(selected);
   const patchEntry = changes => patch({ classes: build.classes.map(entry => entry.id === preview ? { ...entry, ...changes } : entry) });
   const mastery = selected ? masteryCapacity(selected) : 0;
   const weaponOptions = Object.entries(WEAPONS).filter(([, weapon]) => {
@@ -107,18 +139,27 @@ function ClassStage({ build, details, patch }) {
           options={[[ 'protector', 'Protetor' ], [ 'thaumaturge', 'Taumaturgo' ]]} onChange={order => patchEntry({ order })}/>}
         {preview === 'druid' && <Select label="Ordem Primal" value={selected.order}
           options={[[ 'warden', 'Guardião' ], [ 'magician', 'Mago da natureza' ]]} onChange={order => patchEntry({ order })}/>}
-        {selected.level >= 3 && data.subclass[0] && <>
-          <Select label="Subclasse" value={selected.subclass === data.subclass[0] ? selected.subclass : selected.subclass ? 'custom' : ''}
-            options={[data.subclass[0], ['custom', 'Subclasse personalizada']]}
+        {preview === 'cleric' && selected.level >= 7 && <Select label="Golpes Abençoados" value={selected.blessedStrike}
+          options={blessedStrikes} onChange={blessedStrike => patchEntry({ blessedStrike })}/>}
+        {selected.level >= 3 && data.subclasses.length > 0 && <>
+          <Select label="Subclasse" value={subclass?.id ?? (selected.subclass ? 'custom' : '')}
+            options={[...data.subclasses.map(item => [item.id, item.label]), ['custom', 'Subclasse personalizada']]}
             onChange={subclass => patchEntry({ subclass: subclass === 'custom' ? 'Personalizada' : subclass })}/>
-          {selected.subclass && selected.subclass !== data.subclass[0] && <TextField label="Nome da subclasse"
-            value={selected.subclass} onChange={subclass => patchEntry({ subclass })}/>}
+          {selected.subclass && !subclass && <TextField label="Nome da subclasse" value={selected.subclass} onChange={subclass => patchEntry({ subclass })}/>}
+          {subclass?.terrains && <Select label="Terreno do Círculo da Terra" value={selected.terrain}
+            options={Object.keys(subclass.terrains)} onChange={terrain => patchEntry({ terrain })}/>}
         </>}
-        {canFightStyle && <Select label="Estilo de luta" value={selected.style} options={STYLES} onChange={style => patchEntry({ style })}/>}
+        {canFightStyle && <Select label="Estilo de luta" value={selected.style} options={styleOptions(fightingStyles(selected))}
+          onChange={style => patchEntry({ style, ...(style === selected.extraStyle ? { extraStyle: '' } : {}) })}/>}
+        {subclass?.id === 'Champion' && selected.level >= 7 && <Select label="Estilo de luta adicional" value={selected.extraStyle}
+          options={styleOptions(STYLES.filter(style => style !== selected.style))} onChange={extraStyle => patchEntry({ extraStyle })}/>}
+        {metamagicCapacity(selected) > 0 && <Multiple label="Metamagia" options={METAMAGIC}
+          selected={(selected.metamagic ?? []).slice(0, metamagicCapacity(selected))}
+          limit={metamagicCapacity(selected)} onChange={metamagic => patchEntry({ metamagic })}/>}
         {mastery > 0 && <Multiple label="Maestrias em armas" options={weaponOptions} limit={mastery} selected={selected.mastery}
           onChange={mastery => patchEntry({ mastery })}/>}
       </>}
-      {data.subclass[0] && <p className="dnd24-muted">Subclasse SRD no nível 3 · {data.subclass[0]}</p>}
+      {data.subclasses.length > 0 && <SubclassPreview key={`${preview}:${subclass?.id ?? ''}`} subclasses={data.subclasses} selected={subclass}/>}
       {data.rows.length > 0 && <div className="dnd24-progression">
         <h4>Progressão da classe</h4>
         {featureLevels(selected ?? classEntry(preview)).map(({ level, features }) => {
@@ -288,8 +329,9 @@ function SkillStage({ build, details, patch }) {
       {details.background && <p>{details.background.name} · {details.background.skills.map(key => SKILLS[key][0]).join(', ')}</p>}
       {details.skillGroups.map(group => <Multiple key={group.id} label={group.title}
         options={skillOptions(group.allowed)} selected={group.values} limit={group.count}
-        onChange={skills => group.id === 'species' ? patch({ speciesSkill: skills[0] || '' }) : patchEntry(group.id, { skills })}/>)}
-      {details.expertiseGroups.map(group => <Multiple key={group.id} label="Especialização" options={skillOptions(details.proficientSkills)}
+        onChange={skills => group.id === 'species' ? patch({ speciesSkill: skills[0] || '' })
+          : group.id === 'bard:lore' ? patchEntry('bard', { loreSkills: skills }) : patchEntry(group.id, { skills })}/>)}
+      {details.expertiseGroups.map(group => <Multiple key={group.id} label={group.title} options={skillOptions(group.allowed)}
         selected={group.values} limit={group.count} onChange={expertise => patchEntry(group.id, { expertise })}/>)}
       {details.origins.includes('Skilled') && <Multiple label="Habilidoso" options={[
         ...skillOptions(SKILL_KEYS.filter(key => !details.baseSkills.includes(key))), ...TOOLS.filter(key => !details.baseTools.includes(key)),
@@ -322,7 +364,8 @@ function SpellPicker({ group, selected, onSave, onClose }) {
   const [circle, setCircle] = useState('');
   const [choices, setChoices] = useState(selected);
   useEffect(() => { ref.current?.showModal(); }, []);
-  const visible = group.options.filter(spell => spell.name.toLowerCase().includes(search.trim().toLowerCase()) &&
+  const match = normalizeSearch(search.trim());
+  const visible = group.options.filter(spell => (normalizeSearch(spell.label).includes(match) || normalizeSearch(spell.name).includes(match)) &&
     (circle === '' || spell.level === Number(circle)));
   return <dialog ref={ref} className="dnd24-spell-dialog" aria-labelledby="dnd24-spell-picker"
     onCancel={event => { event.preventDefault(); onClose(); }}
@@ -339,11 +382,12 @@ function SpellPicker({ group, selected, onSave, onClose }) {
     </div>
     <div className="dnd24-spell-options">
       {visible.map(spell => <div key={spell.name} className="dnd24-spell-option">
-        <label><input type="checkbox" aria-label={spell.name} checked={choices.includes(spell.name)} disabled={!choices.includes(spell.name) && choices.length >= group.count}
+        <label><input type="checkbox" aria-label={spell.name === spell.label ? spell.label : `${spell.label} (${spell.name})`}
+          checked={choices.includes(spell.name)} disabled={!choices.includes(spell.name) && choices.length >= group.count}
           onChange={event => setChoices(values => event.target.checked ? [...values, spell.name] : values.filter(item => item !== spell.name))}/>
-          <b>{spell.name}</b><small>{spell.level ? `${spell.level}º` : 'Truque'} · {spell.school}{spell.concentration ? ' · Concentração' : ''}</small></label>
+          <b>{spell.label}</b><small>{spell.level ? `${spell.level}º` : 'Truque'} · {spell.school}{spell.concentration ? ' · Concentração' : ''}{spell.ritual ? ' · Ritual' : ''}</small></label>
         <details><summary>Dados da magia</summary>
-          <p>{[spell.components && spell.components.split('').join(' / '), spell.range, spell.duration].filter(Boolean).join(' · ') || 'Consulte a descrição no SRD.'}</p>
+          <p>{[spell.components && spell.components.split('').join(' / '), spell.range, spell.duration].filter(Boolean).join(' · ')}</p>
         </details>
       </div>)}
       {!visible.length && <p>Nenhuma magia encontrada.</p>}
@@ -355,8 +399,8 @@ function SpellPicker({ group, selected, onSave, onClose }) {
 function SpellStage({ details, setSpells }) {
   const [picker, setPicker] = useState('');
   const group = details.groups.find(item => item.id === picker);
-  const alreadyChosen = group && /:(order|cantrips)$/.test(group.id)
-    ? details.groups.filter(other => other.id !== group.id && other.id.split(':')[0] === group.id.split(':')[0] && /:(order|cantrips)$/.test(other.id))
+  const alreadyChosen = group && sharesSpellChoices(group.id)
+    ? details.groups.filter(other => other.id !== group.id && other.id.split(':')[0] === group.id.split(':')[0] && sharesSpellChoices(other.id))
       .flatMap(other => details.selected[other.id]) : [];
   return <div className="dnd24-columns">
     <div className="dnd24-card"><h3>Escolhas de magia</h3>
@@ -365,7 +409,7 @@ function SpellStage({ details, setSpells }) {
         const count = details.selected[item.id].length;
         return <article key={item.id} className="dnd24-subcard" data-pending={count < item.count}>
           <div className="dnd24-spell-heading"><h4>{item.title}</h4><b>{count}/{item.count}</b></div>
-          {count > 0 && <p>{details.selected[item.id].join(' · ')}</p>}
+          {count > 0 && <p>{details.selected[item.id].map(spellLabel).join(' · ')}</p>}
           <button type="button" onClick={() => setPicker(item.id)}>{count ? 'Rever seleção' : 'Escolher'} · {item.title}</button>
         </article>;
       })}
@@ -375,7 +419,7 @@ function SpellStage({ details, setSpells }) {
         <span key={index}>{index + 1}º círculo <b>{count}</b></span>)}</div>
       {details.pact?.pact > 0 && <p>Pacto · {details.pact.pact} de {details.pact.pactLevel}º círculo</p>}
       {details.granted.length > 0 && <ul className="dnd24-plain-list">{details.granted.map((spell, index) =>
-        <li key={`${spell.id}-${index}`}>{spell.name} · {spell.source}</li>)}</ul>}
+        <li key={`${spell.id}-${index}`}>{spellLabel(spell.name)} · {spell.source}</li>)}</ul>}
     </div>
     {group && <SpellPicker key={picker} group={{ ...group, options: group.options.filter(spell => !alreadyChosen.includes(spell.name)) }}
       selected={details.selected[picker]} onClose={() => setPicker('')} onSave={choices => {

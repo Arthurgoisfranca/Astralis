@@ -1,4 +1,4 @@
-import { ABILITIES, ABILITY_KEYS, ARMOR, BACKGROUNDS, CLASSES, LANGUAGES, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, SPELLS, STYLES, TOOLS, WEAPONS } from './dnd2024Catalog.mjs';
+import { ABILITIES, ABILITY_KEYS, ARMOR, BACKGROUNDS, CLASSES, LANGUAGES, METAMAGIC, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, SPELLS, STYLES, TOOLS, WEAPONS } from './dnd2024Catalog.mjs';
 import { dnd5 } from './diceEngines.mjs';
 import { die, rollExpression } from './manualRules.mjs';
 
@@ -47,6 +47,11 @@ export function readBuild(value) {
       ...classEntry(item.id), level, subclass: shortText(item.subclass), order: shortText(item.order), style: shortText(item.style),
       skills: pickList(item.skills, SKILL_KEYS), expertise: pickList(item.expertise, SKILL_KEYS),
       mastery: pickList(item.mastery, Object.keys(WEAPONS)), tools: pickList(item.tools, TOOLS),
+      ...(item.terrain ? { terrain: shortText(item.terrain) } : {}),
+      ...(item.extraStyle ? { extraStyle: shortText(item.extraStyle) } : {}),
+      ...(item.blessedStrike ? { blessedStrike: shortText(item.blessedStrike) } : {}),
+      ...(item.loreSkills?.length ? { loreSkills: pickList(item.loreSkills, SKILL_KEYS) } : {}),
+      ...(item.metamagic?.length ? { metamagic: pickList(item.metamagic, METAMAGIC) } : {}),
       ...(item.id === 'custom' ? { name: shortText(item.name), hitDie: Number(item.hitDie), customSaves: pickList(item.customSaves, ABILITY_KEYS) } : {}),
     });
     remaining -= level;
@@ -77,18 +82,32 @@ export function classData(entry) {
   if (entry?.id === 'custom') return {
     name: String(entry.name || 'Classe personalizada'), hitDie: [6, 8, 10, 12].includes(Number(entry.hitDie)) ? Number(entry.hitDie) : 8,
     primary: [], saves: pickList(entry.customSaves, ABILITY_KEYS).slice(0, 2), skills: [2, SKILL_KEYS], weapons: 'simple', armor: [],
-    rows: [], kits: [{ coins: 0, items: [] }], subclass: ['', {}],
+    rows: [], kits: [{ coins: 0, items: [] }], subclasses: [],
   };
   return entry && has(CLASSES, entry.id) ? CLASSES[entry.id] : null;
 }
 
 export const levelRow = entry => classData(entry)?.rows[entry.level - 1] ?? { features: [] };
+export const subclassData = entry => classData(entry)?.subclasses.find(item => item.id === entry.subclass);
+export const subclassLabel = entry => subclassData(entry)?.label ?? entry.subclass;
+export const activeSubclass = entry => entry.level >= 3 ? subclassData(entry) : undefined;
+export const metamagicCapacity = entry => entry.id !== 'sorcerer' || entry.level < 2 ? 0 : entry.level >= 17 ? 6 : entry.level >= 10 ? 4 : 2;
+export const blessedStrikes = ['Conjuração Poderosa', 'Golpe Divino'];
+export const fightingStyles = entry => [
+  ...STYLES,
+  ...(entry.id === 'paladin' ? ['Blessed Warrior'] : []),
+  ...(entry.id === 'ranger' ? ['Druidic Warrior'] : []),
+];
+const hasStyle = (entry, style) => entry.style === style ||
+  (entry.level >= 7 && activeSubclass(entry)?.id === 'Champion' && entry.extraStyle === style);
+
 export function featureLevels(entry) {
   const data = classData(entry);
   if (!data) return [];
+  const subclass = subclassData(entry);
   return Array.from({ length: data.rows.length || entry.level }, (_, index) => {
     const base = data.rows[index]?.features ?? [];
-    const extra = entry.subclass === data.subclass[0] ? data.subclass[1][index + 1] ?? [] : [];
+    const extra = subclass?.levels[index + 1] ?? [];
     return { level: index + 1, features: [...base, ...extra] };
   });
 }
@@ -146,7 +165,7 @@ function abilityValues(build, background) {
 }
 
 export function skillChoiceGroups(build, background = chosenBackground(build)) {
-  const locked = new Set(background?.skills ?? []);
+  const locked = new Set([...(background?.skills ?? []), ...subclassSkills(build)]);
   const groups = [];
   function add(id, title, options, count, selected) {
     const allowed = options.filter(name => !locked.has(name));
@@ -162,10 +181,12 @@ export function skillChoiceGroups(build, background = chosenBackground(build)) {
   });
   if (build.species === 'human') add('species', 'Humano', SKILL_KEYS, 1, [build.speciesSkill]);
   if (build.species === 'elf') add('species', 'Sentidos aguçados', ['Insight', 'Perception', 'Survival'], 1, [build.speciesSkill]);
+  const lore = build.classes.find(entry => activeSubclass(entry)?.id === 'College of Lore');
+  if (lore) add('bard:lore', 'Colégio do Conhecimento', SKILL_KEYS, 3, lore.loreSkills);
   return groups;
 }
 
-const skillNamesFor = (choices, background) => unique([...(background?.skills ?? []), ...choices.flatMap(group => group.values)]);
+const subclassSkills = build => build.classes.some(entry => activeSubclass(entry)?.id === 'Warrior of Mercy') ? ['Insight', 'Medicine'] : [];
 const featOrigins = build => unique([chosenBackground(build)?.feat, build.species === 'human' ? build.humanFeat : ''].filter(Boolean));
 const magicOrigin = feat => ({
   'Magic Initiate (Cleric)': 'cleric', 'Magic Initiate (Druid)': 'druid', 'Magic Initiate (Wizard)': 'wizard',
@@ -180,40 +201,71 @@ const innateSpells = {
 };
 const dragonResistance = { Preto: 'Ácido', Azul: 'Eletricidade', Latão: 'Fogo', Bronze: 'Eletricidade', Cobre: 'Ácido',
   Ouro: 'Fogo', Verde: 'Veneno', Vermelho: 'Fogo', Prata: 'Frio', Branco: 'Frio' };
-const subclassSpells = {
-  cleric: { 3: ['Aid', 'Bless', 'Cure Wounds', 'Lesser Restoration'], 5: ['Mass Healing Word', 'Revivify'], 7: ['Aura of Life', 'Death Ward'], 9: ['Greater Restoration', 'Mass Cure Wounds'] },
-  paladin: { 3: ['Protection from Evil and Good', 'Shield of Faith'], 5: ['Aid', 'Zone of Truth'], 9: ['Beacon of Hope', 'Dispel Magic'], 13: ['Freedom of Movement', 'Guardian of Faith'], 17: ['Commune', 'Flame Strike'] },
-  sorcerer: { 3: ['Alter Self', 'Chromatic Orb', 'Command', 'Dragon’s Breath'], 5: ['Fear', 'Fly'], 7: ['Arcane Eye', 'Charm Monster'], 9: ['Legend Lore', 'Summon Dragon'] },
-  warlock: { 3: ['Burning Hands', 'Command', 'Scorching Ray', 'Suggestion'], 5: ['Fireball', 'Stinking Cloud'], 7: ['Fire Shield', 'Wall of Fire'], 9: ['Geas', 'Insect Plague'] },
-};
+const thirdCasterRows = [
+  [3, 2], [4, 3], [4, 3], [4, 3], [5, 4, 2], [6, 4, 2], [6, 4, 2],
+  [7, 4, 3], [8, 4, 3], [8, 4, 3], [9, 4, 3, 2], [10, 4, 3, 2], [10, 4, 3, 2],
+  [11, 4, 3, 3], [11, 4, 3, 3], [11, 4, 3, 3], [12, 4, 3, 3, 1], [13, 4, 3, 3, 1],
+];
+
+function classMagic(entry) {
+  const data = classData(entry);
+  if (['Eldritch Knight', 'Arcane Trickster'].includes(activeSubclass(entry)?.id)) {
+    const [prepared, ...slots] = thirdCasterRows[entry.level - 3];
+    return { caster: 'third', ability: 'intelligence', list: 'wizard', row: { slots, prepared, cantrips: entry.level >= 10 ? 3 : 2 } };
+  }
+  if (!data.magic) return null;
+  const [caster, ability] = data.magic;
+  return { caster, ability, list: entry.id, row: levelRow(entry) };
+}
 
 const maxCircle = slots => slots.reduce((max, count, index) => count ? index + 1 : max, 0);
-const spellGroup = (id, title, count, catalog, min, max, ability, exclude = [], optional = false) => ({
-  id, title, count, min, max, ability, optional,
-  options: Object.values(SPELLS).filter(spell => spell.classes.includes(catalog) &&
-    spell.level >= min && spell.level <= max && !exclude.includes(spell.name)),
-});
+function spellGroup(id, title, count, catalogs, min, max, ability, exclude = []) {
+  const lists = Array.isArray(catalogs) ? catalogs : [catalogs];
+  const options = Object.values(SPELLS).filter(spell => spell.level >= min && spell.level <= max &&
+    !exclude.includes(spell.name) && spell.classes.some(catalog => lists.includes(catalog)));
+  return { id, title, count, min, max, ability, options };
+}
+const spellGrantsAt = (table, level) => Object.entries(table ?? {}).filter(([threshold]) => Number(threshold) <= level)
+  .flatMap(([, names]) => names);
+const magicSecrets = ['cleric', 'druid', 'wizard'];
 
 export function spellChoices(build, level) {
   const groups = [], granted = [];
   for (const entry of build.classes) {
-    const data = classData(entry), row = levelRow(entry);
-    if (!data.magic) continue;
-    const [caster, ability] = data.magic;
-    const addGranted = name => granted.push({ name, ability, source: data.name, id: entry.id });
+    const data = classData(entry), subclass = activeSubclass(entry), magic = classMagic(entry);
+    const subclassGrants = unique([
+      ...spellGrantsAt(subclass?.spells, entry.level),
+      ...spellGrantsAt(subclass?.terrains && has(subclass.terrains, entry.terrain) ? subclass.terrains[entry.terrain] : null, entry.level),
+    ]);
+    subclassGrants.forEach(name => granted.push({
+      name, ability: magic?.ability ?? 'intelligence', source: subclass.label, id: entry.id,
+      ...(subclass.id === 'Circle of the Stars' && name === 'Guiding Bolt' ? { innate: 'pb' } : {}),
+      ...(subclass.id === 'Psi Warrior' || subclass.id === 'Illusionist' && name !== 'Minor Illusion' ? { innate: 1 } : {}),
+    }));
+    if (!magic) continue;
+    const { caster, ability, list, row } = magic;
     const fixed = [
-      ...(entry.subclass === data.subclass[0] ? Object.entries(subclassSpells[entry.id] ?? {})
-        .filter(([level]) => Number(level) <= entry.level).flatMap(([, names]) => names) : []),
       ...(entry.id === 'ranger' ? ["Hunter’s Mark"] : []),
       ...(entry.id === 'paladin' && entry.level >= 2 ? ['Divine Smite'] : []),
+      ...(entry.id === 'druid' ? ['Speak with Animals'] : []),
     ];
-    unique(fixed).forEach(addGranted);
-    if (row.cantrips) groups.push(spellGroup(`${entry.id}:cantrips`, `${data.name} · truques`, row.cantrips, entry.id, 0, 0, ability));
+    fixed.filter(name => !subclassGrants.includes(name)).forEach(name => granted.push({ name, ability, source: data.name, id: entry.id }));
+    const exclude = unique([...subclassGrants, ...fixed]);
+    if (row.cantrips) groups.push(spellGroup(`${entry.id}:cantrips`, `${data.name} · truques`, row.cantrips, list, 0, 0, ability, exclude));
     if (entry.id === 'cleric' && entry.order === 'thaumaturge' || entry.id === 'druid' && entry.order === 'magician') {
-      groups.push(spellGroup(`${entry.id}:order`, `${data.name} · truque da ordem`, 1, entry.id, 0, 0, ability));
+      groups.push(spellGroup(`${entry.id}:order`, `${data.name} · truque da ordem`, 1, list, 0, 0, ability, exclude));
+    }
+    if (entry.level >= 2 && ['Blessed Warrior', 'Druidic Warrior'].includes(entry.style)) {
+      const styleList = entry.id === 'paladin' && entry.style === 'Blessed Warrior' ? 'cleric'
+        : entry.id === 'ranger' && entry.style === 'Druidic Warrior' ? 'druid' : '';
+      if (styleList) groups.push(spellGroup(`${entry.id}:style`, `${data.name} · truques do estilo`, 2, styleList, 0, 0, ability, exclude));
     }
     const circle = caster === 'pact' ? row.pactLevel : maxCircle(row.slots ?? []);
-    if (row.prepared && circle) groups.push(spellGroup(`${entry.id}:prepared`, `${data.name} · magias preparadas`, row.prepared, entry.id, 1, circle, ability, fixed));
+    const preparedLists = list === 'bard' && entry.level >= 10 ? ['bard', ...magicSecrets] : list;
+    if (row.prepared && circle) groups.push(spellGroup(`${entry.id}:prepared`, `${data.name} · magias preparadas`, row.prepared, preparedLists, 1, circle, ability, exclude));
+    if (subclass?.id === 'College of Lore' && entry.level >= 6) {
+      groups.push(spellGroup('bard:lore', 'Colégio do Conhecimento · descobertas mágicas', 2, magicSecrets, 0, circle, ability, exclude));
+    }
     if (caster === 'pact') [11, 13, 15, 17].forEach((threshold, index) => {
       if (entry.level >= threshold) groups.push(spellGroup(`warlock:arcanum${index + 6}`, `Arcanum Místico · círculo ${index + 6}`, 1, 'warlock', index + 6, index + 6, ability));
     });
@@ -239,22 +291,28 @@ export function spellChoices(build, level) {
   return { groups, granted };
 }
 
+export const sharesSpellChoices = id => /:(cantrips|order|prepared|lore|style)$/.test(id);
+
 export function selectionsFor(groups, choices) {
   const seen = new Set();
   return Object.fromEntries(groups.map(group => {
-    const isClassCantrip = /:(cantrips|order)$/.test(group.id);
+    const shared = sharesSpellChoices(group.id);
     const origin = group.id.split(':')[0];
     const selected = pickList(choices[group.id], group.options.map(spell => spell.name))
-      .filter(name => !isClassCantrip || !seen.has(`${origin}:${name}`)).slice(0, group.count);
-    if (isClassCantrip) selected.forEach(name => seen.add(`${origin}:${name}`));
+      .filter(name => !shared || !seen.has(`${origin}:${name}`)).slice(0, group.count);
+    if (shared) selected.forEach(name => seen.add(`${origin}:${name}`));
     return [group.id, selected];
   }));
 }
 
 function spellSlots(entries) {
-  const casters = entries.filter(entry => ['full', 'half'].includes(classData(entry).magic?.[0]));
-  if (casters.length <= 1) return casters.length ? levelRow(casters[0]).slots : [];
-  const casterLevel = casters.reduce((sum, entry) => sum + (classData(entry).magic[0] === 'half' ? Math.ceil(entry.level / 2) : entry.level), 0);
+  const casters = entries.flatMap(entry => {
+    const magic = classMagic(entry);
+    return magic && magic.caster !== 'pact' ? [{ ...magic, level: entry.level }] : [];
+  });
+  if (casters.length <= 1) return casters[0]?.row.slots ?? [];
+  const casterLevel = casters.reduce((sum, { caster, level }) =>
+    sum + (caster === 'half' ? Math.ceil(level / 2) : caster === 'third' ? Math.floor(level / 3) : level), 0);
   return CLASSES.cleric.rows[casterLevel - 1].slots;
 }
 
@@ -287,9 +345,13 @@ export function armorClass(armor, shield, modifiers, entries, armorTraining) {
     const defense = entries.find(entry => ['monk', 'barbarian'].includes(entry.id));
     if (defense?.id === 'barbarian') total += modifiers.constitution;
     if (defense?.id === 'monk' && !shield) total += modifiers.wisdom;
+    if (entries.some(entry => activeSubclass(entry)?.id === 'Draconic Sorcery') ||
+      !shield && entries.some(entry => activeSubclass(entry)?.id === 'College of Dance')) {
+      total = Math.max(total, 10 + modifiers.dexterity + modifiers.charisma);
+    }
   }
   if (shield && armorTraining.has('shield')) total += 2;
-  if (type && entries.some(entry => entry.style === 'Defense')) total += 1;
+  if (type && entries.some(entry => hasStyle(entry, 'Defense'))) total += 1;
   return total;
 }
 
@@ -324,15 +386,22 @@ export function buildDetails(build, spellSelections, name = '') {
   }
   const modifiers = Object.fromEntries(ABILITY_KEYS.map(key => [key, modifier(scores[key])]));
   const skillGroups = skillChoiceGroups(build, background);
-  const baseSkills = skillNamesFor(skillGroups, background);
-  const baseTools = unique([background?.tool || build.backgroundTool, ...entries.flatMap(entry => [...(classData(entry).tools ?? []), ...(entry.tools ?? [])])].filter(Boolean));
+  const baseSkills = unique([...(background?.skills ?? []), ...subclassSkills(build), ...skillGroups.flatMap(group => group.values)]);
+  const baseTools = unique([background?.tool || build.backgroundTool, ...entries.flatMap(entry => [
+    ...(classData(entry).tools ?? []), ...(entry.tools ?? []),
+    ...(activeSubclass(entry)?.id === 'Assassin' ? ['Kit de disfarce', 'Kit de envenenador'] : []),
+    ...(activeSubclass(entry)?.id === 'Warrior of Mercy' ? ['Kit de herbalismo'] : []),
+  ])].filter(Boolean));
   const skilled = origins.includes('Skilled') ? pickList(build.skilled, [...SKILL_KEYS, ...TOOLS].filter(key => !baseSkills.includes(key) && !baseTools.includes(key))).slice(0, 3) : [];
   const proficientSkills = unique([...baseSkills, ...skilled.filter(key => has(SKILLS, key))]);
   const expertiseGroups = entries.map(entry => {
+    const scholar = entry.id === 'wizard' && entry.level >= 2;
     const count = entry.id === 'rogue' ? (entry.level >= 6 ? 4 : 2)
       : entry.id === 'bard' && entry.level >= 2 ? (entry.level >= 9 ? 4 : 2)
-        : entry.id === 'ranger' && entry.level >= 2 ? 1 : 0;
-    return { id: entry.id, count, values: pickList(entry.expertise, proficientSkills).slice(0, count) };
+        : entry.id === 'ranger' && entry.level >= 2 || scholar ? 1 : 0;
+    const allowed = scholar ? proficientSkills.filter(skill => ['Arcana', 'History', 'Investigation', 'Medicine', 'Nature', 'Religion'].includes(skill)) : proficientSkills;
+    return { id: entry.id, title: scholar ? 'Acadêmico · Mago' : `Especialização · ${classData(entry).name}`,
+      count, allowed, values: pickList(entry.expertise, allowed).slice(0, count) };
   }).filter(group => group.count);
   const expertise = unique(expertiseGroups.flatMap(group => group.values));
   const saves = entries.some(entry => entry.id === 'monk' && entry.level >= 14) ? ABILITY_KEYS : starting?.saves ?? [];
@@ -340,12 +409,14 @@ export function buildDetails(build, spellSelections, name = '') {
     const data = classData(entry);
     const proper = index === 0 ? data.armor : data.multiclassArmor ?? [];
     const extra = entry.id === 'cleric' && entry.order === 'protector' ? ['heavy']
-      : entry.id === 'druid' && entry.order === 'warden' ? ['medium'] : [];
+      : entry.id === 'druid' && entry.order === 'warden' ? ['medium']
+        : activeSubclass(entry)?.id === 'College of Valor' ? ['medium', 'shield'] : [];
     return [...proper, ...extra];
   }));
   const weaponTraining = new Set(entries.map((entry, index) => {
     const data = classData(entry);
-    if (entry.id === 'cleric' && entry.order === 'protector' || entry.id === 'druid' && entry.order === 'warden') return 'martial';
+    if (entry.id === 'cleric' && entry.order === 'protector' || entry.id === 'druid' && entry.order === 'warden' ||
+      activeSubclass(entry)?.id === 'College of Valor') return 'martial';
     return index === 0 ? data.weapons : data.multiclassWeapons ?? '';
   }));
   const equipment = startingKit(build, starting, background);
@@ -368,16 +439,25 @@ export function buildDetails(build, spellSelections, name = '') {
   const issues = Object.fromEntries(BUILDER_STEPS.map(step => [step, []]));
   if (!entries.length) issues.Classe.push('Escolha a classe inicial.');
   entries.forEach((entry, index) => {
-    const data = classData(entry);
+    const data = classData(entry), subclass = activeSubclass(entry);
     if (entry.id === 'custom' && (!entry.name?.trim() || data.saves.length !== 2)) issues.Classe.push('Defina o nome e duas salvaguardas da classe personalizada.');
     if (entries.length > 1 && data.primary.length) {
       const qualifying = data.primary.map(key => scores[key] >= 13);
       if (!(data.either ? qualifying.some(Boolean) : qualifying.every(Boolean))) issues.Classe.push(`Multiclasse: confira os requisitos de ${data.name}.`);
     }
     if (entry.level >= 3 && entry.id !== 'custom' && !entry.subclass) issues.Classe.push(`${data.name}: escolha a subclasse.`);
+    if (subclass?.terrains && !has(subclass.terrains, entry.terrain)) issues.Classe.push(`${subclass.label}: escolha o terreno.`);
     if ((entry.id === 'cleric' && !['protector', 'thaumaturge'].includes(entry.order)) ||
       (entry.id === 'druid' && !['warden', 'magician'].includes(entry.order))) issues.Classe.push(`${data.name}: escolha a ordem.`);
-    if ((entry.id === 'fighter' || ['paladin', 'ranger'].includes(entry.id) && entry.level >= 2) && !STYLES.includes(entry.style)) issues.Classe.push(`${data.name}: escolha um estilo de luta.`);
+    if (entry.id === 'cleric' && entry.level >= 7 && !blessedStrikes.includes(entry.blessedStrike)) {
+      issues.Classe.push('Clérigo: escolha a opção de Golpes Abençoados.');
+    }
+    if ((entry.id === 'fighter' || ['paladin', 'ranger'].includes(entry.id) && entry.level >= 2) && !fightingStyles(entry).includes(entry.style)) issues.Classe.push(`${data.name}: escolha um estilo de luta.`);
+    if (subclass?.id === 'Champion' && entry.level >= 7 && (!STYLES.includes(entry.extraStyle) || entry.extraStyle === entry.style)) {
+      issues.Classe.push(`${subclass.label}: escolha um estilo de luta adicional.`);
+    }
+    const metamagicCount = metamagicCapacity(entry);
+    if (pickList(entry.metamagic, METAMAGIC).length < metamagicCount) issues.Classe.push(`${data.name}: complete as ${metamagicCount} escolhas de Metamagia.`);
     if (masteryCapacity(entry) > pickList(entry.mastery, Object.keys(WEAPONS)).length) issues.Classe.push(`${data.name}: complete as maestrias.`);
     const toolCount = index === 0 ? data.toolPicks ?? 0 : entry.id === 'bard' ? 1 : 0;
     if (toolCount > (entry.tools?.length ?? 0)) issues.Perícias.push(`${data.name}: complete as ferramentas ou instrumentos.`);
@@ -401,7 +481,7 @@ export function buildDetails(build, spellSelections, name = '') {
   if (!name.trim()) issues.Sobre.push('Informe o nome do personagem.');
   if (pickList(build.languages, LANGUAGES.filter(key => key !== 'Comum')).length !== 2) issues.Sobre.push('Escolha dois idiomas além do Comum.');
   const jackOfAllTrades = entries.some(entry => entry.id === 'bard' && entry.level >= 2);
-  const archery = entries.some(entry => entry.style === 'Archery');
+  const archery = entries.some(entry => hasStyle(entry, 'Archery'));
   const tools = [...baseTools, ...skilled.filter(key => TOOLS.includes(key))];
   const resistance = species?.resistance ?? (build.species === 'dragonborn' ? dragonResistance[build.lineage] : build.species === 'tiefling'
     ? { Abissal: 'Veneno', Ctônico: 'Necrótico', Infernal: 'Fogo' }[build.lineage] : undefined);
@@ -409,11 +489,12 @@ export function buildDetails(build, spellSelections, name = '') {
     entry.id === 'cleric' && entry.order === 'thaumaturge' && ['Arcana', 'Religion'].includes(skill) ||
     entry.id === 'druid' && entry.order === 'magician' && ['Arcana', 'Nature'].includes(skill)
       ? [[skill, Math.max(1, modifiers.wisdom)]] : [])));
+  const cleric = entries.find(entry => entry.id === 'cleric' && entry.level >= 7);
   return { level, pb, ...abilities, modifiers, skillGroups, proficientSkills, expertiseGroups, expertise, saves, armorTraining, weaponTraining, equipment,
     hp, ac, armor, shield, tools, baseSkills, baseTools, resistance, jackOfAllTrades, archery, knowledgeBonus,
     initiative: modifiers.dexterity + (alert || (jackOfAllTrades ? Math.floor(pb / 2) : 0)),
     speed: speed + (build.species === 'elf' && build.lineage === 'Elfo da floresta' ? 5 : 0),
-    darkvision, species, background, origins, feats, ...spell, selected, slots: spellSlots(entries),
+    darkvision, species, background, origins, feats, ...spell, selected, slots: spellSlots(entries), blessedStrike: cleric?.blessedStrike,
     pact: entries.filter(entry => entry.id === 'warlock').map(levelRow)[0],
     favoredEnemy: entries.filter(entry => entry.id === 'ranger').map(levelRow)[0]?.favoredEnemy ?? 0, issues };
 }
@@ -437,6 +518,8 @@ export function resourceCaps(build, details) {
       case 'fighter':
         resource('wind', 'Retomar o Fôlego', row.secondWind, 1);
         resource('surge', 'Surto de Ação', entry.level >= 17 ? 2 : entry.level >= 2 ? 1 : 0, Infinity);
+        if (activeSubclass(entry)?.id === 'Battle Master') resource('superiority', 'Dados de Superioridade',
+          entry.level >= 15 ? 6 : entry.level >= 7 ? 5 : 4, Infinity, entry.level >= 18 ? 'd12' : entry.level >= 10 ? 'd10' : 'd8');
         break;
       case 'monk': resource('focus', 'Pontos de Foco', row.focus, Infinity); break;
       case 'paladin':

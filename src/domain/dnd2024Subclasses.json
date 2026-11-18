@@ -1,0 +1,340 @@
+{
+  "barbarian": [
+    {
+      "id": "World Tree",
+      "label": "Trilha da Árvore do Mundo",
+      "page": 54,
+      "levels": {"3": ["Vitalidade da Árvore"], "6": ["Ramos da Árvore"], "10": ["Raízes Devastadoras"], "14": ["Percorrer a Árvore"]}
+    },
+    {
+      "id": "Berserker",
+      "label": "Trilha do Berserker",
+      "page": 55,
+      "levels": {"3": ["Frenesi"], "6": ["Fúria Irracional"], "10": ["Retaliação"], "14": ["Presença Intimidante"]}
+    },
+    {
+      "id": "Wild Heart",
+      "label": "Trilha do Coração Selvagem",
+      "page": 56,
+      "levels": {"3": ["Arauto da Fauna", "Fúria dos Selvagens"], "6": ["Aspecto dos Selvagens"], "10": ["Arauto da Natureza"], "14": ["Poder dos Selvagens"]}
+    },
+    {
+      "id": "Zealot",
+      "label": "Trilha do Fanático",
+      "page": 57,
+      "levels": {"3": ["Campeão dos Deuses", "Fúria Divina"], "6": ["Concentração Fanática"], "10": ["Presença Zelosa"], "14": ["Fúria dos Deuses"]}
+    }
+  ],
+  "bard": [
+    {
+      "id": "College of Valor",
+      "label": "Colégio da Bravura",
+      "page": 64,
+      "levels": {"3": ["Inspiração em Combate", "Treinamento Marcial"], "6": ["Ataque Extra"], "14": ["Magia de Batalha"]}
+    },
+    {
+      "id": "College of Dance",
+      "label": "Colégio da Dança",
+      "page": 65,
+      "levels": {"3": ["Ginga Fascinante"], "6": ["Gingado Coordenado", "Movimento Inspirador"], "14": ["Evasão Liderada"]}
+    },
+    {
+      "id": "College of Lore",
+      "label": "Colégio do Conhecimento",
+      "page": 66,
+      "levels": {"3": ["Palavras de Interrupção", "Proficiências Bônus"], "6": ["Descobertas Mágicas"], "14": ["Perícia Inigualável"]}
+    },
+    {
+      "id": "College of Glamour",
+      "label": "Colégio do Glamour",
+      "page": 66,
+      "levels": {"3": ["Magia Fascinante", "Manto de Inspiração"], "6": ["Manto de Majestade"], "14": ["Majestade Inquebrável"]},
+      "spells": {"3": ["Charm Person", "Mirror Image"], "6": ["Command"]}
+    }
+  ],
+  "warlock": [
+    {
+      "id": "Archfey Patron",
+      "label": "Patrono Arquifada",
+      "page": 75,
+      "levels": {"3": ["Magias de Pacto da Arquifada", "Passos Feéricos"], "6": ["Fuga em Névoa"], "10": ["Defesas Sedutoras"], "14": ["Magia Sedutora"]},
+      "spells": {"3": ["Calm Emotions", "Faerie Fire", "Força Espectral", "Misty Step", "Sleep"], "5": ["Plant Growth", "Blink"], "7": ["Dominate Beast", "Greater Invisibility"], "9": ["Dominate Person", "Seeming"]}
+    },
+    {
+      "id": "Celestial Patron",
+      "label": "Patrono Celestial",
+      "page": 76,
+      "levels": {"3": ["Luz Medicinal", "Magia de Pacto do Celestial"], "6": ["Alma Radiante"], "10": ["Resiliência Celestial"], "14": ["Vingança Calcinante"]},
+      "spells": {"3": ["Aid", "Sacred Flame", "Cure Wounds", "Light", "Guiding Bolt", "Lesser Restoration"], "5": ["Daylight", "Revivify"], "7": ["Guardian of Faith", "Wall of Fire"], "9": ["Convocar Celestial", "Greater Restoration"]}
+    },
+    {
+      "id": "Great Old One Patron",
+      "label": "Patrono O Grande Antigo",
+      "page": 77,
+      "levels": {"3": ["Magias de Pacto do Grande Antigo", "Magias Psíquicas", "Mente Desperta"], "6": ["Combatente Clarividente"], "10": ["Danação Mística", "Escudo Mental"], "14": ["Criar Servo"]},
+      "spells": {"3": ["Detect Thoughts", "Força Espectral", "Hideous Laughter", "Dissonant Whispers"], "5": ["Clairvoyance", "Fome de Hadar"], "7": ["Confusion", "Invocar Aberração"], "9": ["Modify Memory", "Telekinesis"], "10": ["Hex"]}
+    },
+    {
+      "id": "Fiend Patron",
+      "label": "Patrono Ínfero",
+      "page": 78,
+      "levels": {"3": ["Bênção do Tenebroso", "Magias de Pacto do Ínfero"], "6": ["A Sorte do Próprio Tenebroso"], "10": ["Resistência Ínfera"], "14": ["Lançar no Inferno"]},
+      "spells": {"3": ["Command", "Burning Hands", "Scorching Ray", "Suggestion"], "5": ["Fireball", "Stinking Cloud"], "7": ["Fire Shield", "Wall of Fire"], "9": ["Geas", "Insect Plague"]}
+    }
+  ],
+  "cleric": [
+    {
+      "id": "War Domain",
+      "label": "Domínio da Guerra",
+      "page": 85,
+      "levels": {"3": ["Magias de Domínio da Guerra", "Ataque Direcionado", "Sacerdote da Guerra"], "6": ["Bênção do Deus da Guerra"], "17": ["Avatar da Guerra"]},
+      "spells": {"3": ["Spiritual Weapon", "Magic Weapon", "Shield of Faith", "Guiding Bolt"], "5": ["Spirit Guardians", "Manto do Cruzado"], "7": ["Fire Shield", "Freedom of Movement"], "9": ["Golpe de Arço", "Hold Monster"]}
+    },
+    {
+      "id": "Light Domain",
+      "label": "Domínio da Luz",
+      "page": 86,
+      "levels": {"3": ["Brilho do Amanhecer", "Labareda Protetora", "Magias de Domínio da Luz"], "6": ["Labareda Protetora Aprimorada"], "17": ["Coroa de Luz"]},
+      "spells": {"3": ["Faerie Fire", "Burning Hands", "Scorching Ray", "See Invisibility"], "5": ["Fireball", "Daylight"], "7": ["Wall of Fire", "Arcane Eye"], "9": ["Flame Strike", "Scrying"]}
+    },
+    {
+      "id": "Trickery Domain",
+      "label": "Domínio da Trapaça",
+      "page": 87,
+      "levels": {"3": ["Magias de Domínio da Trapaça", "Bênção do Trapaceiro", "Invocar Duplicidade"], "6": ["Transposição do Trapaceiro"], "17": ["Duplicidade Aprimorada"]},
+      "spells": {"3": ["Disguise Self", "Charm Person", "Pass without Trace", "Mirror Image"], "5": ["Nondetection", "Hypnotic Pattern"], "7": ["Confusion", "Dimension Door"], "9": ["Dominate Person", "Modify Memory"]}
+    },
+    {
+      "id": "Life Domain",
+      "label": "Domínio da Vida",
+      "page": 89,
+      "levels": {"3": ["Magias de Domínio da Vida", "Discípulo da Vida", "Preservar a Vida"], "6": ["Curandeiro Abençoado"], "17": ["Cura Suprema"]},
+      "spells": {"3": ["Aid", "Bless", "Cure Wounds", "Lesser Restoration"], "5": ["Mass Healing Word", "Revivify"], "7": ["Aura of Life", "Death Ward"], "9": ["Mass Cure Wounds", "Greater Restoration"]}
+    }
+  ],
+  "druid": [
+    {
+      "id": "Circle of the Moon",
+      "label": "Círculo da Lua",
+      "page": 96,
+      "levels": {"3": ["Formas Animais dos Círculos", "Magias do Círculo da Lua"], "6": ["Formas Animais dos Círculos Aprimoradas"], "10": ["Passo Lunar"], "14": ["Forma Lunar"]},
+      "spells": {"3": ["Cure Wounds", "Starry Wisp", "Moonbeam"], "5": ["Conjure Animals"], "7": ["Fonte do Luar"], "9": ["Mass Cure Wounds"]}
+    },
+    {
+      "id": "Circle of the Land",
+      "label": "Círculo da Terra",
+      "page": 97,
+      "levels": {"3": ["Auxílio da Terra", "Magias do Círculo da Terra"], "6": ["Recuperação Natural"], "10": ["Proteção Natural"], "14": ["Santuário Natural"]},
+      "terrains": {"Árido": {"3": ["Burning Hands", "Fire Bolt", "Blur"], "5": ["Fireball"], "7": ["Blight"], "9": ["Wall of Stone"]}, "Polar": {"3": ["Fog Cloud", "Hold Person", "Ray of Frost"], "5": ["Sleet Storm"], "7": ["Ice Storm"], "9": ["Cone of Cold"]}, "Temperado": {"3": ["Misty Step", "Sleep", "Shocking Grasp"], "5": ["Lightning Bolt"], "7": ["Freedom of Movement"], "9": ["Tree Stride"]}, "Tropical": {"3": ["Acid Splash", "Ray of Sickness", "Web"], "5": ["Stinking Cloud"], "7": ["Polymorph"], "9": ["Insect Plague"]}}
+    },
+    {
+      "id": "Circle of the Stars",
+      "label": "Círculo das Estrelas",
+      "page": 98,
+      "levels": {"3": ["Forma Estrelada", "Mapa Estelar"], "6": ["Presságio Cósmico"], "10": ["Constelações Cintilantes"], "14": ["Repleto de Estrelas"]},
+      "spells": {"3": ["Guidance", "Guiding Bolt"]}
+    },
+    {
+      "id": "Circle of the Sea",
+      "label": "Círculo do Mar",
+      "page": 100,
+      "levels": {"3": ["Ira do Mar", "Magias do Círculo do Mar"], "6": ["Afinidade Aquática"], "10": ["Filho da Tempestade"], "14": ["Manifestação Oceânica"]},
+      "spells": {"3": ["Shatter", "Gust of Wind", "Fog Cloud", "Thunderwave", "Ray of Frost"], "5": ["Lightning Bolt", "Water Breathing"], "7": ["Control Water", "Ice Storm"], "9": ["Conjure Elemental", "Hold Monster"]}
+    }
+  ],
+  "sorcerer": [
+    {
+      "id": "Aberrant Sorcery",
+      "label": "Feitiçaria Aberrante",
+      "page": 109,
+      "levels": {"3": ["Fala Telepática", "Magias Psiônicas"], "6": ["Defesas Psíquicas", "Feitiçaria Psiônica"], "14": ["Revelação em Carne"], "18": ["Implosão de Distorção"]},
+      "spells": {"3": ["Calm Emotions", "Braços de Hadar", "Detect Thoughts", "Dissonant Whispers", "Talho Mental"], "5": ["Fome de Hadar", "Sending"], "7": ["Invocar Aberração", "Black Tentacles"], "9": ["Telepathic Bond", "Telekinesis"]}
+    },
+    {
+      "id": "Draconic Sorcery",
+      "label": "Feitiçaria Dracônica",
+      "page": 110,
+      "levels": {"3": ["Magias Dracônicas", "Resiliência Dracônica"], "6": ["Afinidade Elemental"], "14": ["Asas de Dragão"], "18": ["Companheiro Dracônico"]},
+      "spells": {"3": ["Alter Self", "Command", "Chromatic Orb", "Dragon’s Breath"], "5": ["Fear", "Fly"], "7": ["Charm Monster", "Arcane Eye"], "9": ["Summon Dragon", "Legend Lore"]}
+    },
+    {
+      "id": "Clockwork Sorcery",
+      "label": "Feitiçaria Mecânica",
+      "page": 111,
+      "levels": {"3": ["Magias Mecânicas", "Restaurar Equilíbrio"], "6": ["Bastião da Lei"], "14": ["Transe da Ordem"], "18": ["Cavalgada Mecânica"]},
+      "spells": {"3": ["Alarm", "Aid", "Protection from Evil and Good", "Lesser Restoration"], "5": ["Dispel Magic", "Protection from Energy"], "7": ["Invocar Constructo", "Freedom of Movement"], "9": ["Wall of Force", "Greater Restoration"]}
+    },
+    {
+      "id": "Wild Magic Sorcery",
+      "label": "Feitiçaria Selvagem",
+      "page": 113,
+      "levels": {"3": ["Marés do Caos", "Surto de Magia Selvagem"], "6": ["Distorcer a Sorte"], "14": ["Caos Controlado"], "18": ["Surto Controlado"]}
+    }
+  ],
+  "ranger": [
+    {
+      "id": "Fey Wanderer",
+      "label": "Andarilho Feérico",
+      "page": 120,
+      "levels": {"3": ["Glamour Transcendental", "Golpes Terríveis", "Magias do Andarilho Feérico"], "7": ["Detalhe Sedutor"], "11": ["Reforços Feéricos"], "15": ["Andarilho Nebuloso"]},
+      "spells": {"3": ["Charm Person"], "5": ["Misty Step"], "9": ["Convocar Feérico"], "13": ["Dimension Door"], "17": ["Mislead"]}
+    },
+    {
+      "id": "Hunter",
+      "label": "Caçador",
+      "page": 121,
+      "levels": {"3": ["Conhecimento do Caçador", "Presa do Caçador"], "7": ["Táticas Defensivas"], "11": ["Presa do Caçador Superior"], "15": ["Defesa do Caçador"]}
+    },
+    {
+      "id": "Beast Master",
+      "label": "Senhor das Feras",
+      "page": 122,
+      "levels": {"3": ["Companheiro Primal"], "7": ["Treinamento Excepcional"], "11": ["Fúria Bestial"], "15": ["Compartilhar Magias"]}
+    },
+    {
+      "id": "Gloom Stalker",
+      "label": "Vigilante das Sombras",
+      "page": 124,
+      "levels": {"3": ["Emboscador das Sombras", "Magias do Vigilante das Sombras", "Visão Umbrosa"], "7": ["Mente de Ferro"], "11": ["Torrente do Vigilante"], "15": ["Esquiva Sombria"]},
+      "spells": {"3": ["Disguise Self"], "5": ["Rope Trick"], "9": ["Fear"], "13": ["Greater Invisibility"], "17": ["Seeming"]}
+    }
+  ],
+  "fighter": [
+    {
+      "id": "Champion",
+      "label": "Campeão",
+      "page": 129,
+      "levels": {"3": ["Atleta Extraordinário", "Crítico Aprimorado"], "7": ["Estilo de Luta Adicional"], "10": ["Combatente Heroico"], "15": ["Crítico Superior"], "18": ["Sobrevivente"]}
+    },
+    {
+      "id": "Eldritch Knight",
+      "label": "Cavaleiro Místico",
+      "page": 130,
+      "levels": {"3": ["Conjuração", "Vínculo com Arma"], "7": ["Magia de Guerra"], "10": ["Golpe Místico"], "15": ["Investida Mística"], "18": ["Magia de Guerra Aprimorada"]}
+    },
+    {
+      "id": "Psi Warrior",
+      "label": "Combatente Psíquico",
+      "page": 132,
+      "levels": {"3": ["Poder Psiônico"], "7": ["Adepto Telecinético"], "10": ["Resguardo Mental"], "15": ["Baluarte de Energia"], "18": ["Mestre Telecinético"]},
+      "spells": {"18": ["Telekinesis"]}
+    },
+    {
+      "id": "Battle Master",
+      "label": "Mestre da Batalha",
+      "page": 133,
+      "levels": {"3": ["Estudioso da Guerra", "Superioridade em Combate"], "7": ["Conheça Seu Inimigo"], "10": ["Superioridade em Combate Aprimorada"], "15": ["Implacável"], "18": ["Superioridade em Combate Suprema"]}
+    }
+  ],
+  "rogue": [
+    {
+      "id": "Soulknife",
+      "label": "Adaga Espiritual",
+      "page": 139,
+      "levels": {"3": ["Lâminas Psíquicas", "Poder Psiônico"], "9": ["Lâminas da Alma"], "13": ["Véu Psíquico"], "17": ["Rasgar Mente"]}
+    },
+    {
+      "id": "Assassin",
+      "label": "Assassino",
+      "page": 141,
+      "levels": {"3": ["Assassinar", "Ferramentas de Assassino"], "9": ["Especialista em Infiltração"], "13": ["Armas Venenosas"], "17": ["Golpe Mortal"]}
+    },
+    {
+      "id": "Thief",
+      "label": "Ladrão",
+      "page": 142,
+      "levels": {"3": ["Andarilho de Telhados", "Mão Leve"], "9": ["Furtividade Suprema"], "13": ["Usar Dispositivo Mágico"], "17": ["Reflexos de Ladrão"]}
+    },
+    {
+      "id": "Arcane Trickster",
+      "label": "Trapaceiro Arcano",
+      "page": 143,
+      "levels": {"3": ["Conjuração", "Mãos Mágicas Ligeiras"], "9": ["Emboscada Mágica"], "13": ["Trapaceiro Versátil"], "17": ["Ladrão de Magias"]},
+      "spells": {"3": ["Mage Hand"]}
+    }
+  ],
+  "wizard": [
+    {
+      "id": "Abjurer",
+      "label": "Abjurador",
+      "page": 154,
+      "levels": {"3": ["Proteção Arcana", "Versado em Abjuração"], "6": ["Proteção Projetada"], "10": ["Rompe-Magia"], "14": ["Resistência à Magia"]},
+      "spells": {"10": ["Counterspell", "Dispel Magic"]}
+    },
+    {
+      "id": "Diviner",
+      "label": "Adivinhador",
+      "page": 155,
+      "levels": {"3": ["Prodígio", "Versado em Adivinhação"], "6": ["Perito em Adivinhação"], "10": ["O Terceiro Olho"], "14": ["Prodígio Maior"]}
+    },
+    {
+      "id": "Evoker",
+      "label": "Evocador",
+      "page": 156,
+      "levels": {"3": ["Truque Potente", "Versado em Evocação"], "6": ["Esculpir Magias"], "10": ["Evocação Potencializada"], "14": ["Sobrecarga"]}
+    },
+    {
+      "id": "Illusionist",
+      "label": "Ilusionista",
+      "page": 157,
+      "levels": {"3": ["Ilusões Aprimoradas", "Versado em Ilusão"], "6": ["Criaturas Espectrais"], "10": ["Autoimagem Ilusória"], "14": ["Realidade Ilusória"]},
+      "spells": {"3": ["Minor Illusion"], "6": ["Convocar Feérico", "Invocar Fera"]}
+    }
+  ],
+  "monk": [
+    {
+      "id": "Warrior of the Open Hand",
+      "label": "Combatente da Mão Espalmada",
+      "page": 162,
+      "levels": {"3": ["Técnica da Mão Espalmada"], "6": ["Integridade Corporal"], "11": ["Passo Veloz"], "17": ["Palma Vibrante"]}
+    },
+    {
+      "id": "Warrior of Mercy",
+      "label": "Combatente da Misericórdia",
+      "page": 162,
+      "levels": {"3": ["Implementos de Misericórdia", "Mão de Cura", "Mão de Dolo"], "6": ["Toque de Médico"], "11": ["Torrente de Cura e Dolo"], "17": ["Mão da Misericórdia Final"]}
+    },
+    {
+      "id": "Warrior of Shadow",
+      "label": "Combatente das Sombras",
+      "page": 163,
+      "levels": {"3": ["Artes das Sombras"], "6": ["Passo da Sombra"], "11": ["Passo da Sombra Aprimorado"], "17": ["Manto da Sombra"]}
+    },
+    {
+      "id": "Warrior of the Elements",
+      "label": "Combatente dos Elementos",
+      "page": 164,
+      "levels": {"3": ["Manipular Elementos", "Sintonia Elemental"], "6": ["Explosão Elemental"], "11": ["Passo dos Elementos"], "17": ["Ápice Elemental"]}
+    }
+  ],
+  "paladin": [
+    {
+      "id": "Oath of Devotion",
+      "label": "Juramento da Devoção",
+      "page": 171,
+      "levels": {"3": ["Magias do Juramento da Devoção", "Arma Sagrada"], "7": ["Aura de Devoção"], "15": ["Destruição Protetora"], "20": ["Resplendor Sagrado"]},
+      "spells": {"3": ["Shield of Faith", "Protection from Evil and Good"], "5": ["Aid", "Zone of Truth"], "9": ["Dispel Magic", "Beacon of Hope"], "13": ["Guardian of Faith", "Freedom of Movement"], "17": ["Flame Strike", "Commune"]}
+    },
+    {
+      "id": "Oath of Glory",
+      "label": "Juramento da Glória",
+      "page": 172,
+      "levels": {"3": ["Atleta Inigualável", "Destruição Inspiradora", "Magias do Juramento da Glória"], "7": ["Aura de Vivacidade"], "15": ["Defesa Gloriosa"], "20": ["Lenda Viva"]},
+      "spells": {"3": ["Heroism", "Guiding Bolt"], "5": ["Enhance Ability", "Magic Weapon"], "9": ["Haste", "Protection from Energy"], "13": ["Compulsion", "Freedom of Movement"], "17": ["Legend Lore", "Presença Régia de Yolande"]}
+    },
+    {
+      "id": "Oath of Vengeance",
+      "label": "Juramento da Vingança",
+      "page": 173,
+      "levels": {"3": ["Magias do Juramento da Vingança", "Voto de Inimizade"], "7": ["Vingador Implacável"], "15": ["Alma Vingativa"], "20": ["Anjo Vingador"]},
+      "spells": {"3": ["Hunter’s Mark", "Bane"], "5": ["Hold Person", "Misty Step"], "9": ["Haste", "Protection from Energy"], "13": ["Banishment", "Dimension Door"], "17": ["Hold Monster", "Scrying"]}
+    },
+    {
+      "id": "Oath of the Ancients",
+      "label": "Juramento dos Anciões",
+      "page": 174,
+      "levels": {"3": ["A Ira da Natureza", "Magias do Juramento dos Anciões"], "7": ["Aura de Resistência"], "15": ["Sentinela Imortal"], "20": ["Campeão Ancestral"]},
+      "spells": {"3": ["Speak with Animals", "Ensnaring Strike"], "5": ["Misty Step", "Moonbeam"], "9": ["Plant Growth", "Protection from Energy"], "13": ["Stoneskin", "Ice Storm"], "17": ["Commune with Nature", "Tree Stride"]}
+    }
+  ]
+}

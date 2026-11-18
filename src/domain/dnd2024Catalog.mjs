@@ -1,5 +1,6 @@
 import progression from './dnd2024Progression.json' with { type: 'json' };
 import spellData from './dnd2024Spells.json' with { type: 'json' };
+import subclasses from './dnd2024Subclasses.json' with { type: 'json' };
 
 export const DND_2024 = 'D&D 5.5E (2024)';
 export const SRD_URL = 'https://www.dndbeyond.com/srd';
@@ -38,35 +39,30 @@ const classData = {
     name: 'Bárbaro', hitDie: 12, primary: ['strength'], saves: ['strength', 'constitution'],
     skills: [2, ['Animal Handling', 'Athletics', 'Intimidation', 'Nature', 'Perception', 'Survival']],
     weapons: 'martial', armor: ['light', 'medium', 'shield'], multiclassArmor: ['shield'], multiclassWeapons: 'martial',
-    subclass: ['Berserker', { 3: ['Frenzy'], 6: ['Mindless Rage'], 10: ['Retaliation'], 14: ['Intimidating Presence'] }],
     kits: [kit(15, ['Greataxe', ['Handaxe', 4], "Explorer's Pack"]), kit(75)],
   },
   bard: {
     name: 'Bardo', hitDie: 8, primary: ['charisma'], saves: ['dexterity', 'charisma'],
     skills: [3, SKILL_KEYS], weapons: 'simple', armor: ['light'], multiclassArmor: ['light'], multiclassSkills: 1,
     toolPicks: 3, magic: ['full', 'charisma'],
-    subclass: ['College of Lore', { 3: ['Bonus Proficiencies', 'Cutting Words'], 6: ['Magical Discoveries'], 14: ['Peerless Skill'] }],
     kits: [kit(19, ['Leather Armor', ['Dagger', 2], 'Musical Instrument', "Entertainer's Pack"]), kit(90)],
   },
   cleric: {
     name: 'Clérigo', hitDie: 8, primary: ['wisdom'], saves: ['wisdom', 'charisma'],
     skills: [2, ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion']],
     weapons: 'simple', armor: ['light', 'medium', 'shield'], multiclassArmor: ['light', 'medium', 'shield'], magic: ['full', 'wisdom'],
-    subclass: ['Life Domain', { 3: ['Disciple of Life', 'Life Domain Spells', 'Preserve Life'], 6: ['Blessed Healer'], 17: ['Supreme Healing'] }],
     kits: [kit(7, ['Chain Shirt', 'Shield', 'Mace', 'Holy Symbol', "Priest's Pack"]), kit(110)],
   },
   druid: {
     name: 'Druida', hitDie: 8, primary: ['wisdom'], saves: ['intelligence', 'wisdom'],
     skills: [2, ['Animal Handling', 'Arcana', 'Insight', 'Medicine', 'Nature', 'Perception', 'Religion', 'Survival']],
     weapons: 'simple', armor: ['light', 'shield'], multiclassArmor: ['light', 'shield'], tools: ['Kit de herbalismo'], magic: ['full', 'wisdom'],
-    subclass: ['Circle of the Land', { 3: ['Circle of the Land Spells', 'Land’s Aid'], 6: ['Natural Recovery'], 10: ['Nature’s Ward'], 14: ['Nature’s Sanctuary'] }],
     kits: [kit(9, ['Leather Armor', 'Shield', 'Sickle', 'Druidic Focus (Quarterstaff)', "Explorer's Pack", 'Herbalism Kit']), kit(50)],
   },
   fighter: {
     name: 'Guerreiro', hitDie: 10, primary: ['strength', 'dexterity'], either: true, saves: ['strength', 'constitution'],
     skills: [2, ['Acrobatics', 'Animal Handling', 'Athletics', 'History', 'Insight', 'Intimidation', 'Persuasion', 'Perception', 'Survival']],
     weapons: 'martial', armor: ['light', 'medium', 'heavy', 'shield'], multiclassArmor: ['light', 'medium', 'shield'], multiclassWeapons: 'martial',
-    subclass: ['Champion', { 3: ['Improved Critical', 'Remarkable Athlete'], 7: ['Additional Fighting Style'], 10: ['Heroic Warrior'], 15: ['Superior Critical'], 18: ['Survivor'] }],
     kits: [kit(4, ['Chain Mail', 'Greatsword', 'Flail', ['Javelin', 8], "Dungeoneer's Pack"]),
       kit(11, ['Studded Leather Armor', 'Scimitar', 'Shortsword', 'Longbow', ['Arrow', 20], 'Quiver', "Dungeoneer's Pack"]), kit(155)],
   },
@@ -74,54 +70,48 @@ const classData = {
     name: 'Monge', hitDie: 8, primary: ['dexterity', 'wisdom'], saves: ['strength', 'dexterity'],
     skills: [2, ['Acrobatics', 'Athletics', 'History', 'Insight', 'Religion', 'Stealth']],
     weapons: 'monk', armor: [], multiclassWeapons: 'monk', toolPicks: 1,
-    subclass: ['Warrior of the Open Hand', { 3: ['Open Hand Technique'], 6: ['Wholeness of Body'], 11: ['Fleet Step'], 17: ['Quivering Palm'] }],
     kits: [kit(11, ['Spear', ['Dagger', 5], 'Chosen Tool', "Explorer's Pack"]), kit(50)],
   },
   paladin: {
     name: 'Paladino', hitDie: 10, primary: ['strength', 'charisma'], saves: ['wisdom', 'charisma'],
     skills: [2, ['Athletics', 'Insight', 'Intimidation', 'Medicine', 'Persuasion', 'Religion']],
     weapons: 'martial', armor: ['light', 'medium', 'heavy', 'shield'], multiclassArmor: ['light', 'medium', 'shield'], multiclassWeapons: 'martial', magic: ['half', 'charisma'],
-    subclass: ['Oath of Devotion', { 3: ['Oath of Devotion Spells', 'Sacred Weapon'], 7: ['Aura of Devotion'], 15: ['Smite of Protection'], 20: ['Holy Nimbus'] }],
     kits: [kit(9, ['Chain Mail', 'Shield', 'Longsword', ['Javelin', 6], 'Holy Symbol', "Priest's Pack"]), kit(150)],
   },
   ranger: {
     name: 'Patrulheiro', hitDie: 10, primary: ['dexterity', 'wisdom'], saves: ['strength', 'dexterity'],
     skills: [3, ['Animal Handling', 'Athletics', 'Insight', 'Investigation', 'Nature', 'Perception', 'Stealth', 'Survival']],
     weapons: 'martial', armor: ['light', 'medium', 'shield'], multiclassArmor: ['light', 'medium', 'shield'], multiclassWeapons: 'martial', multiclassSkills: 1, magic: ['half', 'wisdom'],
-    subclass: ['Hunter', { 3: ['Hunter’s Lore', 'Hunter’s Prey'], 7: ['Defensive Tactics'], 11: ['Superior Hunter’s Prey'], 15: ['Superior Hunter’s Defense'] }],
     kits: [kit(7, ['Studded Leather Armor', 'Scimitar', 'Shortsword', 'Longbow', ['Arrow', 20], 'Quiver', 'Druidic Focus (Mistletoe)', "Explorer's Pack"]), kit(150)],
   },
   rogue: {
     name: 'Ladino', hitDie: 8, primary: ['dexterity'], saves: ['dexterity', 'intelligence'],
     skills: [4, ['Acrobatics', 'Athletics', 'Deception', 'Insight', 'Intimidation', 'Investigation', 'Perception', 'Persuasion', 'Sleight of Hand', 'Stealth']],
     weapons: 'rogue', armor: ['light'], multiclassArmor: ['light'], multiclassSkills: 1, tools: ['Ferramentas de ladrão'],
-    subclass: ['Thief', { 3: ['Fast Hands', 'Second-Story Work'], 9: ['Supreme Sneak'], 13: ['Use Magic Device'], 17: ['Thief’s Reflexes'] }],
     kits: [kit(8, ['Leather Armor', ['Dagger', 2], 'Shortsword', 'Shortbow', ['Arrow', 20], 'Quiver', "Thieves’ Tools", "Burglar's Pack"]), kit(100)],
   },
   sorcerer: {
     name: 'Feiticeiro', hitDie: 6, primary: ['charisma'], saves: ['constitution', 'charisma'],
     skills: [2, ['Arcana', 'Deception', 'Insight', 'Intimidation', 'Persuasion', 'Religion']],
     weapons: 'simple', armor: [], magic: ['full', 'charisma'],
-    subclass: ['Draconic Sorcery', { 3: ['Draconic Resilience', 'Draconic Spells'], 6: ['Elemental Affinity'], 14: ['Dragon Wings'], 18: ['Dragon Companion'] }],
     kits: [kit(28, ['Spear', ['Dagger', 2], 'Arcane Focus (Crystal)', "Dungeoneer's Pack"]), kit(50)],
   },
   warlock: {
     name: 'Bruxo', hitDie: 8, primary: ['charisma'], saves: ['wisdom', 'charisma'],
     skills: [2, ['Arcana', 'Deception', 'History', 'Intimidation', 'Investigation', 'Nature', 'Religion']],
     weapons: 'simple', armor: ['light'], multiclassArmor: ['light'], magic: ['pact', 'charisma'],
-    subclass: ['Fiend Patron', { 3: ['Dark One’s Blessing', 'Fiend Spells'], 6: ['Dark One’s Own Luck'], 10: ['Fiendish Resilience'], 14: ['Hurl Through Hell'] }],
     kits: [kit(15, ['Leather Armor', 'Sickle', ['Dagger', 2], 'Arcane Focus (Orb)', 'Book (Occult Lore)', "Scholar's Pack"]), kit(100)],
   },
   wizard: {
     name: 'Mago', hitDie: 6, primary: ['intelligence'], saves: ['intelligence', 'wisdom'],
     skills: [2, ['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Nature', 'Religion']],
     weapons: 'simple', armor: [], magic: ['full', 'intelligence'],
-    subclass: ['Evoker', { 3: ['Evocation Savant', 'Potent Cantrip'], 6: ['Sculpt Spells'], 10: ['Empowered Evocation'], 14: ['Overchannel'] }],
     kits: [kit(5, [['Dagger', 2], 'Arcane Focus (Quarterstaff)', 'Robe', 'Spellbook', "Scholar's Pack"]), kit(55)],
   },
 };
 
-export const CLASSES = Object.fromEntries(Object.entries(classData).map(([id, data]) => [id, { ...data, rows: progression[id] }]));
+export const CLASSES = Object.fromEntries(Object.entries(classData).map(([id, data]) =>
+  [id, { ...data, rows: progression[id], subclasses: subclasses[id] }]));
 export const SPECIES = {
   dragonborn: { name: 'Draconato', speed: 30, darkvision: 60, traits: ['Sopro', 'Resistência dracônica', 'Voo dracônico'],
     lineages: ['Preto', 'Azul', 'Latão', 'Bronze', 'Cobre', 'Ouro', 'Verde', 'Vermelho', 'Prata', 'Branco'] },
@@ -155,10 +145,12 @@ export const BACKGROUNDS = {
 };
 
 export const ORIGIN_FEATS = ['Alert', 'Magic Initiate (Cleric)', 'Magic Initiate (Druid)', 'Magic Initiate (Wizard)', 'Savage Attacker', 'Skilled', 'Tough'];
-export const STYLES = ['Archery', 'Defense', 'Dueling', 'Great Weapon Fighting', 'Protection', 'Two-Weapon Fighting'];
-export const SPELLS = Object.fromEntries(Object.entries(spellData).map(([name, [level, school, classes, components, range, duration, flags = '']]) =>
-  [name, { name, level, school, classes, components, range, duration, concentration: flags.includes('C') || duration.startsWith('Concentration'),
-    ritual: flags.includes('R') }]));
+export const STYLES = ['Archery', 'Blind Fighting', 'Defense', 'Dueling', 'Great Weapon Fighting', 'Interception',
+  'Protection', 'Thrown Weapon Fighting', 'Two-Weapon Fighting', 'Unarmed Fighting'];
+export const METAMAGIC = ['Acelerada', 'Agravada', 'Buscadora', 'Cautelosa', 'Distante', 'Duplicada', 'Persistente', 'Potencializada', 'Sutil', 'Transmutada'];
+export const SPELLS = Object.fromEntries(Object.entries(spellData).map(([name, [level, school, classes, components, range, duration, flags, label]]) =>
+  [name, { name, label, level, school, classes, components, range, duration, concentration: flags.includes('C'), ritual: flags.includes('R') }]));
+export const spellLabel = name => SPELLS[name]?.label ?? name;
 
 export const WEAPONS = {
   Club: ['1d4', 'Concussão', 'Slow', 'light'], Dagger: ['1d4', 'Perfuração', 'Nick', 'finesse light', '20/60 pés'],
