@@ -1,11 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import AudioCenter from "./AudioCenter.jsx";
 import SystemConsultations from "./SystemConsultations.jsx";
 import AccountPanel from "./AccountPanel.jsx";
 import { MODULES, Home, Lobby } from "./AppShell.jsx";
 import { sha256Hex } from "./SharedTools.jsx";
-import { Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, NPCs, PDFWorkshop, Sessions, Characters, Workbench } from "./CampaignModules.jsx";
+// Módulos da mesa (e o editor de fichas que eles importam) só são baixados ao abrir uma aba da sala.
+const loadCampaignModules = () => import("./CampaignModules.jsx");
+const campaignModule = name => lazy(() => loadCampaignModules().then(module => ({ default: module[name] })));
+const [Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, NPCs, PDFWorkshop, Sessions, Characters, Workbench] =
+  ["Agenda", "CommunityLibrary", "Diary", "GMDocuments", "GMQuickShield", "GMShield", "Handouts", "Lore", "Maps", "NPCs", "PDFWorkshop", "Sessions", "Characters", "Workbench"].map(campaignModule);
+const moduleLoading = <p className="muted-copy" role="status">Carregando módulo…</p>;
 
 const ThemeContext=createContext({theme:'dark',toggleTheme:()=>{}});
 function ThemeProvider({children}){
@@ -249,6 +254,7 @@ function App({user, accountClient, openProfile}) {
       {nicknameEditing && <form className="nickname-form" onSubmit={saveNick}><input aria-label="Apelido nesta mesa" maxLength="60" value={nickname} onChange={e=>setNickname(e.target.value)} autoFocus/><button className="button secondary">Salvar apelido</button><button className="button quiet" type="button" onClick={()=>setNicknameEditing(false)}>Cancelar</button></form>}
       <div className="page-body">
         {tab === "lobby" && <Lobby room={roomState} presence={presence} isGM={isGM} identity={identity} currentAvatar={user?.user_metadata?.avatar_url} inviteUrl={inviteUrl} send={send}/>}
+        <Suspense fallback={moduleLoading}>
         {tab === "workbench" && <Workbench room={roomState} presence={presence} isGM={isGM} onOpen={setTab}/>}
         {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} tracker={roomState.gmShield?.tracker} send={send}/>}
         {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send}/>}
@@ -258,15 +264,17 @@ function App({user, accountClient, openProfile}) {
         {tab === "npcs" && <NPCs items={roomState.npcs} isGM={isGM} send={send} upload={uploadFile}/>}
         {tab === "handouts" && <Handouts items={roomState.handouts} isGM={isGM} send={send} upload={uploadFile}/>}
         {tab === "maps" && <Maps value={roomState.map} room={roomState} identity={identity} isGM={isGM} send={send} upload={uploadFile}/>}
-        <AudioCenter value={roomState.music} isGM={isGM} send={send} upload={uploadFile} visible={tab === "music"}/>
         {tab === "diary" && <Diary value={roomState.notes} journal={roomState.journal || []} identity={identity} isGM={isGM} send={send}/>}
         {tab === "sessions" && <Sessions items={roomState.sessions} count={roomState.campaign.sessionCount} isGM={isGM} send={send}/>}
         {tab === "gmDocs" && isGM && <GMDocuments items={roomState.gmDocs || []} upload={uploadFile} getSignedUrl={getSignedUrl} send={send}/>}
         {tab === "pdfs" && <PDFWorkshop items={roomState.pdfs || []} room={roomState} identity={identity} isGM={isGM} system={roomState.campaign.system} upload={uploadFile} getSignedUrl={getSignedUrl} send={send}/>}
         {tab === "library" && <CommunityLibrary room={roomState} identity={identity} items={[]} upload={uploadFile}/>}
+        </Suspense>
+        {/* Fora do Suspense: o player nunca é desmontado nem escondido enquanto uma aba carrega. */}
+        <AudioCenter value={roomState.music} isGM={isGM} send={send} upload={uploadFile} visible={tab === "music"}/>
       </div>
     </main>
-    {isGM && tab!=="gmShield" && <GMQuickShield system={roomState.campaign.system}/>}
+    {isGM && tab!=="gmShield" && <Suspense fallback={null}><GMQuickShield system={roomState.campaign.system}/></Suspense>}
     {notice && <div className="toast">{notice}</div>}
   </div>;
 }
