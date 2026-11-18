@@ -3,11 +3,16 @@
   "version": "1.4.0",
   "private": true,
   "description": "Gestão de campanhas e lobby de RPG em tempo real",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "node scripts/dev.js",
     "start": "node server.js",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "migrate:cloud": "node --env-file=.env scripts/migrateSupabaseData.js",
     "test": "node --test --test-timeout=60000 \"tests/*.test.cjs\" \"tests/*.test.mjs\""
   },
@@ -25,8 +30,11 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@vitejs/plugin-react": "^5.0.4",
-    "concurrently": "^9.2.1",
+    "eslint": "10.15.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7"
   }
