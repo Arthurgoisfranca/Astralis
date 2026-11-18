@@ -25,6 +25,8 @@ async function join(roomId, inviteToken, name) { const r = await json(`/api/room
 function connect(roomId, token) {
   return new Promise((resolve, reject) => {
     const socket = io(base, { auth: { roomId, token }, transports: ['websocket'], forceNew: true });
+    // Captura o primeiro estado desde já: ele pode chegar no mesmo pacote do "connect".
+    socket.firstState = new Promise(resolveState => socket.once('room:state', resolveState));
     socket.once('connect', () => resolve(socket)); socket.once('connect_error', reject);
   });
 }
@@ -98,8 +100,6 @@ test('A5: rolagens sorteadas no servidor; valores e autor do cliente são ignora
   const player = (await join(gm.room.id, gm.room.inviteToken, 'Ana')).body;
   const socket = await connect(gm.room.id, player.token);
   try {
-    const states = [];
-    socket.on('room:state', state => states.push(state));
     const ack = await emit(socket, 'dice:roll', { kind: 'triangle', params: { dice: [3, 3, 3, 3, 3, 3] } });
     assert.equal(ack.ok, true);
     assert.equal(ack.recorded, true);
@@ -107,7 +107,7 @@ test('A5: rolagens sorteadas no servidor; valores e autor do cliente são ignora
     const legacy = await emit(socket, 'room:action', { type: 'dice:record', payload: { system: 'Triangle Agency', dice: [3, 3, 3, 3, 3, 3], actor: 'Mestre' } });
     assert.equal(legacy.ok, true);
     const gmSocket = await connect(gm.room.id, gm.token);
-    const gmState = await new Promise(resolve => gmSocket.once('room:state', resolve));
+    const gmState = await gmSocket.firstState;
     gmSocket.disconnect();
     assert.equal(gmState.gmShield.tracker.rolls.length, 2);
     assert.ok(gmState.gmShield.tracker.rolls.every(roll => roll.actor === 'Ana'));
@@ -124,7 +124,7 @@ test('A6: entradas simultâneas não perdem jogadores nem passam das vagas', asy
   assert.equal(results.filter(r => r.status === 200).length, 3);
   assert.equal(results.filter(r => r.status === 403).length, 3);
   const socket = await connect(gm.room.id, gm.token);
-  const state = await new Promise(resolve => socket.once('room:state', resolve));
+  const state = await socket.firstState;
   socket.disconnect();
   assert.equal(state.players.length, 3);
   assert.equal(state.campaign.availableSeats, 0);
