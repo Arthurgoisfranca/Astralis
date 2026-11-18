@@ -386,7 +386,8 @@ function SpellPicker({ group, selected, onSave, onClose }) {
           checked={choices.includes(spell.name)} disabled={!choices.includes(spell.name) && choices.length >= group.count}
           onChange={event => setChoices(values => event.target.checked ? [...values, spell.name] : values.filter(item => item !== spell.name))}/>
           <b>{spell.label}</b><small>{spell.level ? `${spell.level}º` : 'Truque'} · {spell.school}{spell.concentration ? ' · Concentração' : ''}{spell.ritual ? ' · Ritual' : ''}</small></label>
-        <details><summary>Dados da magia</summary>
+        <details><summary>Resumo e dados da magia</summary>
+          <p className="dnd24-spell-effect">{spell.summary}</p>
           <p>{[spell.components && spell.components.split('').join(' / '), spell.range, spell.duration].filter(Boolean).join(' · ')}</p>
         </details>
       </div>)}

@@ -1,5 +1,6 @@
 import progression from './dnd2024Progression.json' with { type: 'json' };
 import spellData from './dnd2024Spells.json' with { type: 'json' };
+import spellSummaries from './dnd2024SpellSummaries.json' with { type: 'json' };
 import subclasses from './dnd2024Subclasses.json' with { type: 'json' };
 
 export const DND_2024 = 'D&D 5.5E (2024)';
@@ -149,7 +150,8 @@ export const STYLES = ['Archery', 'Blind Fighting', 'Defense', 'Dueling', 'Great
   'Protection', 'Thrown Weapon Fighting', 'Two-Weapon Fighting', 'Unarmed Fighting'];
 export const METAMAGIC = ['Acelerada', 'Agravada', 'Buscadora', 'Cautelosa', 'Distante', 'Duplicada', 'Persistente', 'Potencializada', 'Sutil', 'Transmutada'];
 export const SPELLS = Object.fromEntries(Object.entries(spellData).map(([name, [level, school, classes, components, range, duration, flags, label]]) =>
-  [name, { name, label, level, school, classes, components, range, duration, concentration: flags.includes('C'), ritual: flags.includes('R') }]));
+  [name, { name, label, summary: spellSummaries[name], level, school, classes, components, range, duration,
+    concentration: flags.includes('C'), ritual: flags.includes('R') }]));
 export const spellLabel = name => SPELLS[name]?.label ?? name;
 
 export const WEAPONS = {
