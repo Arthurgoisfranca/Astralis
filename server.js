@@ -107,9 +107,10 @@ function createState(input) {
     modules: { agenda: true, system: true, characters: true, lore: true, npcs: true, handouts: true, maps: true, music: true, diary: true, sessions: true, gmDocs: true, pdfs: true, library: true },
     players: [], appointments: campaign.date ? [{ id: id(6), title: "Sessão 1", date: campaign.date, time: campaign.time, location: campaign.location, notes: "" }] : [],
     systemGuide: { text: "", consultations: [] }, gmShield: { notes: "", tracker: { chaos: 0, fear: 0, rolls: [] } }, lore: { text: "" }, npcs: [], handouts: [], gmDocs: [], pdfs: [],
-    map: { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: 5 },
+    map: { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: 5, fog: [] },
     music: { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65, loop: false, shuffle: false },
-    notes: { shared: "", private: {} }, journal: [], sessions: [], invites: []
+    notes: { shared: "", private: {} }, journal: [], sessions: [], invites: [],
+    chat: [], rollLog: [], initiative: { active: false, round: 1, turn: 0, entries: [] }
   };
 }
 const ROOM_ROLES = ["gm", "coGm", "player", "spectator"];
@@ -125,7 +126,10 @@ function normalizeState(input) {
     systemGuide: { text: state.systemGuide?.text || "", consultations: Array.isArray(state.systemGuide?.consultations) ? state.systemGuide.consultations : [] }, gmShield: { ...(base.gmShield || { notes: "" }), ...(state.gmShield || {}), tracker: { ...(base.gmShield?.tracker || { chaos: 0, fear: 0, rolls: [] }), ...(state.gmShield?.tracker || {}) } }, lore: state.lore || { text: "" }, npcs: Array.isArray(state.npcs) ? state.npcs : [],
     handouts: Array.isArray(state.handouts) ? state.handouts : [], gmDocs: Array.isArray(state.gmDocs) ? state.gmDocs : [],
     pdfs: Array.isArray(state.pdfs) ? state.pdfs : [], journal: Array.isArray(state.journal) ? state.journal : [],
-    map: { ...base.map, ...(state.map || {}), tokens: Array.isArray(state.map?.tokens) ? state.map.tokens : [], measurements: Array.isArray(state.map?.measurements) ? state.map.measurements : [] },
+    map: { ...base.map, ...(state.map || {}), tokens: Array.isArray(state.map?.tokens) ? state.map.tokens : [], measurements: Array.isArray(state.map?.measurements) ? state.map.measurements : [], fog: Array.isArray(state.map?.fog) ? state.map.fog : [] },
+    chat: Array.isArray(state.chat) ? state.chat : [],
+    rollLog: Array.isArray(state.rollLog) ? state.rollLog : [],
+    initiative: { active: Boolean(state.initiative?.active), round: Number(state.initiative?.round) || 1, turn: Number(state.initiative?.turn) || 0, entries: Array.isArray(state.initiative?.entries) ? state.initiative.entries : [] },
     music: { ...base.music, ...(state.music || {}) }, notes: { ...base.notes, ...(state.notes || {}), private: { ...(state.notes?.private || {}) } },
     sessions: Array.isArray(state.sessions) ? state.sessions : [],
     invites: (Array.isArray(state.invites) ? state.invites : []).map(normalizeInvite).filter(Boolean),
@@ -170,7 +174,7 @@ function publicState(room, socketData) {
     lore: isGM || state.modules.lore ? state.lore : { text: "" },
     npcs: isGM ? state.npcs : state.modules.npcs ? state.npcs.filter(npc => npc.public) : [],
     handouts: isGM ? state.handouts : state.modules.handouts ? state.handouts.filter(item => item.revealed) : [],
-    map: isGM || (state.modules.maps && state.map.visible) ? state.map : { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: state.map.gridFeet },
+    map: isGM ? state.map : (state.modules.maps && state.map.visible) ? state.map : { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: state.map.gridFeet, fog: [] },
     music: isGM || state.modules.music ? { ...state.music, serverTime: Date.now() } : { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65, loop: false, shuffle: false },
     notes: isGM || state.modules.diary ? { shared: state.notes.shared, private: ownPrivate } : { shared: "", private: "" },
     journal: isGM ? state.journal : state.modules.diary ? state.journal.filter(item => !(item.is_private ?? (item.visibility === "private")) || (item.authorId || item.author_id) === socketData.userId) : [],
@@ -180,6 +184,7 @@ function publicState(room, socketData) {
     appointments: isGM || state.modules.agenda ? state.appointments : [],
     invites: isGM ? (state.invites || []) : [],
     customSheet: state.customSheet || null,
+    chat: state.chat || [], rollLog: state.rollLog || [], initiative: state.initiative || { active: false, round: 1, turn: 0, entries: [] },
     role: socketData.role, userId: socketData.userId, name: socketData.name
   };
 }
@@ -309,6 +314,24 @@ function applyAction(room, socket, action) {
     }
     case "appointment:delete": requireGM(socket); { const removed = state.appointments.find(item => item.id === payload.id); state.appointments = state.appointments.filter(item => item.id !== payload.id); if (removed && state.campaign.date === removed.date) { const next = state.appointments[0]; state.campaign.date = next ? next.date : ""; state.campaign.time = next ? next.time : ""; state.campaign.location = next ? next.location : ""; } break; }
     case "session:add": requireGM(socket); { const session = { id: id(6), date: text(payload.date, 30), title: text(payload.title, 120), summary: text(payload.summary, 4000), createdAt: Date.now() }; if (!session.date) throw new Error("Informe a data da sessão."); state.sessions.unshift(session); state.campaign.sessionCount = state.sessions.length; break; }
+    case "chat:send": denySpectator(socket); {
+      const body = text(payload.body, 1000); if (!body) throw new Error("Mensagem vazia.");
+      state.chat = [...(state.chat || []), { id: id(6), userId: socket.data.userId, name: socket.data.name, body, at: Date.now() }].slice(-200);
+      break;
+    }
+    case "chat:clear": requireGM(socket); state.chat = []; break;
+    case "initiative:set": requireGM(socket); {
+      const entries = (Array.isArray(payload.entries) ? payload.entries : []).slice(0, 40).map(e => ({ id: text(e.id, 60) || id(5), name: text(e.name, 80), value: Math.trunc(Number(e.value) || 0) })).filter(e => e.name).sort((a, b) => b.value - a.value);
+      state.initiative = { active: entries.length > 0, round: 1, turn: 0, entries }; break;
+    }
+    case "initiative:advance": requireGM(socket); {
+      const init = state.initiative; if (!init.active || !init.entries.length) break;
+      init.turn = (Number(init.turn) || 0) + 1;
+      if (init.turn >= init.entries.length) { init.turn = 0; init.round = (Number(init.round) || 1) + 1; }
+      break;
+    }
+    case "initiative:clear": requireGM(socket); state.initiative = { active: false, round: 1, turn: 0, entries: [] }; break;
+    case "map:fog:set": requireGM(socket); state.map.fog = (Array.isArray(payload.fog) ? payload.fog : []).slice(0, 200).map(r => ({ x: Math.min(100, Math.max(0, Number(r.x) || 0)), y: Math.min(100, Math.max(0, Number(r.y) || 0)), w: Math.min(100, Math.max(0, Number(r.w) || 0)), h: Math.min(100, Math.max(0, Number(r.h) || 0)) })); break;
     case "invite:create": {
       requireOwner(socket);
       const role = ROOM_ROLES.includes(payload.role) && payload.role !== "gm" ? payload.role : "player";
@@ -748,13 +771,17 @@ io.on("connection", socket => {
     if (kind === "alpha2Reroll") socket.data.lastAlpha = { ...socket.data.lastAlpha, result, rerolled: true };
     const rollId = kind === "alpha2" || kind === "alpha2Reroll" ? socket.data.lastAlpha.id : undefined;
     const system = dice.RECORDED_KINDS[kind];
-    if (!system) return ack({ ok: true, result, rollId });
+    // Toda rolagem entra no histórico compartilhado da mesa; Triangle/Daggerheart também alimentam o Escudo.
     enqueueRoom(roomId, async () => {
       const latest = await readRoom(roomId); if (!latest) throw new Error("Sala encerrada.");
-      if (latest.state.campaign.system !== system) return false;
-      recordRoll(latest.state, system, socket.data.name, result); await saveRoom(latest); await broadcastRoom(roomId);
-      return true;
-    }).then(recorded => ack({ ok: true, result, recorded }), () => ack({ ok: true, result, recorded: false, warning: "Rolagem feita, mas não foi registrada no Escudo do Mestre." }));
+      const summary = Array.isArray(result?.dice) ? result.dice.join(", ") : "";
+      latest.state.rollLog = [...(latest.state.rollLog || []), { id: id(6), actor: socket.data.name, kind, title: text(result?.title, 120), total: Number.isFinite(result?.total) ? result.total : null, dice: Array.isArray(result?.dice) ? result.dice.slice(0, 30) : [], at: Date.now() }].slice(-100);
+      let recorded = false;
+      if (system && latest.state.campaign.system === system) { recordRoll(latest.state, system, socket.data.name, result); recorded = true; }
+      void summary;
+      await saveRoom(latest); await broadcastRoom(roomId);
+      return recorded;
+    }).then(recorded => ack({ ok: true, result, rollId, recorded }), () => ack({ ok: true, result, rollId, recorded: false, warning: "Rolagem feita, mas não foi registrada na mesa." }));
   });
   socket.on("disconnect", () => roomPresence(roomId).catch(() => {}));
 });

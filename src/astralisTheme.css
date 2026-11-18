@@ -289,3 +289,28 @@ body:has(.modal-scrim) .global-theme-toggle{z-index:1}
 .roll-dice span[data-dice="d20"]::before{clip-path:polygon(50% 0%,92% 20%,100% 65%,50% 100%,0% 65%,8% 20%)}
 .roll-studio.roll-theme-cairn{--studio-accent:#76ba88}
 @media(max-width:600px){.weapon-row{display:grid;grid-template-columns:1fr 1fr}.weapon-row button{grid-column:1/-1}.cairn-combat{flex-direction:column;align-items:stretch}.cairn-combat label{max-width:none}}
+
+/* Bloco (f): chat, iniciativa, névoa; e RSVP do bloco (e). */
+.chat-panel{display:flex;flex-direction:column;height:60vh;min-height:320px}
+.chat-log{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:8px}
+.chat-line{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:baseline;padding:4px 8px;border-radius:8px}
+.chat-line.roll{background:color-mix(in srgb,var(--gold) 12%,transparent)}
+.chat-line.mine{background:color-mix(in srgb,var(--sage) 12%,transparent)}
+.chat-line b{font-size:12px;color:var(--muted)}
+.chat-line time{font-size:11px;color:var(--muted)}
+.chat-input{display:flex;gap:8px;padding:8px}
+.chat-input input{flex:1}
+.initiative-panel{margin-top:16px}
+.initiative-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.initiative-list li{display:flex;justify-content:space-between;padding:6px 10px;border:1px solid var(--line);border-radius:8px}
+.initiative-list li.current{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 14%,transparent)}
+.initiative-editor{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.rsvp-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.rsvp-button{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer}
+.rsvp-button.chosen{border-color:var(--sage);background:color-mix(in srgb,var(--sage) 16%,transparent)}
+.recurrence-tag{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-left:6px}
+.fog-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.fog-overlay rect{fill:#05060b}
+.fog-overlay.fog-gm rect{fill:color-mix(in srgb,#05060b 55%,transparent)}
+.roll-inline{padding:0 6px;margin-left:6px}
+.field-warning{color:var(--red,#c0566b)}

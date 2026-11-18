@@ -71,6 +71,36 @@ export function Agenda({ items = [], isGM, send, identity }) {
     </div>
   </div>;
 }
+export function Chat({ messages = [], rollLog = [], identity, send }) {
+  const [text, setText] = useState("");
+  const endRef = useRef(null);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length, rollLog.length]);
+  // Une mensagens e rolagens numa linha do tempo única.
+  const timeline = [
+    ...messages.map(m => ({ ...m, type: "msg" })),
+    ...rollLog.map(r => ({ id: "r" + r.id, type: "roll", name: r.actor, body: (r.title ? r.title + " · " : "") + (r.dice?.length ? "[" + r.dice.join(", ") + "]" : "") + (r.total != null ? " = " + r.total : ""), at: r.at })),
+  ].sort((a, b) => a.at - b.at);
+  const submit = e => { e.preventDefault(); const body = text.trim(); if (!body) return; send("chat:send", { body }); setText(""); };
+  return <div className="view-stack"><ModuleHeader eyebrow="MESA" title="Chat e rolagens" description="Conversa do grupo e histórico de rolagens em tempo real."/>
+    <section className="surface chat-panel">
+      <div className="chat-log">{timeline.length ? timeline.map(item => <div key={item.id} className={"chat-line " + item.type + (item.userId === identity?.userId ? " mine" : "")}><b>{item.name}</b><span>{item.body}</span><time>{new Date(item.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time></div>) : <Empty>Nenhuma mensagem ainda.</Empty>}<div ref={endRef}/></div>
+      <form className="chat-input" onSubmit={submit}><input value={text} maxLength={1000} placeholder="Escreva para a mesa…" onChange={e => setText(e.target.value)}/><button className="button secondary">Enviar</button></form>
+    </section>
+  </div>;
+}
+export function Initiative({ value = { entries: [], round: 1, turn: 0, active: false }, isGM, send }) {
+  const [draft, setDraft] = useState("");
+  const addFromDraft = () => {
+    const entries = draft.split(/\r?\n/).map(line => { const m = line.match(/^\s*(.+?)\s*[:=]\s*(-?\d+)\s*$/); return m ? { id: "", name: m[1], value: Number(m[2]) } : null; }).filter(Boolean);
+    if (entries.length) { send("initiative:set", { entries }); setDraft(""); }
+  };
+  return <section className="surface initiative-panel"><div className="panel-heading"><div><div className="section-eyebrow">INICIATIVA</div><h2>Rodada {value.round || 1}</h2></div></div>
+    <ol className="initiative-list">{(value.entries || []).map((e, i) => <li key={e.id || i} className={i === value.turn && value.active ? "current" : ""}><b>{e.name}</b><span>{e.value}</span></li>)}</ol>
+    {value.active && isGM && <button className="button secondary" onClick={() => send("initiative:advance", {})}>Próximo turno</button>}
+    {isGM && <div className="initiative-editor"><textarea rows={4} placeholder={"Nome = valor por linha\nEx.: Aragorn = 18"} value={draft} onChange={e => setDraft(e.target.value)}/><div><button type="button" className="button quiet" onClick={addFromDraft}>Definir ordem</button>{value.entries?.length ? <button type="button" className="button quiet" onClick={() => send("initiative:clear", {})}>Limpar</button> : null}</div></div>}
+    {!value.entries?.length && !isGM && <Empty>O Mestre ainda não iniciou a contagem.</Empty>}
+  </section>;
+}
 export function Workbench({ room, presence = [], isGM, onOpen }) {
   const today = dateKey(new Date()), upcoming = (room.appointments || []).filter(item => item.date >= today).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 3);
   const handouts = room.handouts || [], journal = room.journal || [], sessions = room.sessions || [];
@@ -185,12 +215,18 @@ export function Maps({ value, room, identity, isGM, send, upload }) {
   function pointerMove(event) {
     const position = stagePosition(event);
     if (moving) setMoving(old => ({ ...old, ...position }));
-    else if (drawing) setDrawing(old => ({ ...old, ...position }));
+    else if (drawing) setDrawing(old => ({ ...old, x2: position.x, y2: position.y }));
     else if (drag) setPan({ x: event.clientX - drag.x, y: event.clientY - drag.y });
   }
   function pointerUp() {
     if (moving) { send("map:token:move", { id: moving.id, x: moving.x, y: moving.y }); setMoving(null); }
-    if (drawing) { send("map:measure:add", drawing); setDrawing(null); }
+    if (drawing) {
+      if (drawing.type === "fog") {
+        const rect = { x: Math.min(drawing.x1, drawing.x2), y: Math.min(drawing.y1, drawing.y2), w: Math.abs(drawing.x2 - drawing.x1), h: Math.abs(drawing.y2 - drawing.y1) };
+        if (rect.w > 1 && rect.h > 1) send("map:fog:set", { fog: [...(value.fog || []), rect] });
+      } else send("map:measure:add", drawing);
+      setDrawing(null);
+    }
     setDrag(null);
   }
   function dropToken(event) {
@@ -199,10 +235,10 @@ export function Maps({ value, room, identity, isGM, send, upload }) {
   }
   return <div className="view-stack"><ModuleHeader eyebrow="MAPA DA SESSÃO" title="Mesa tática" description="Arraste tokens, marque áreas e acompanhe as alterações ao vivo."/>
     {isGM && <section className="surface map-tools"><label className="button quiet file-button">{busy ? "Preparando mapa…" : "Carregar mapa"}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event => uploadMap(event.target.files[0])}/></label><input className="map-name" placeholder="Nome do mapa" value={name} onChange={event => setName(event.target.value)}/><label className="check-line"><input type="checkbox" checked={value.visible} onChange={event => send("map:update", { image, name, visible: event.target.checked, tokens, measurements, gridFeet })}/> Mostrar para jogadores</label><label className="check-line">Grade <select value={gridFeet} onChange={event => setGridFeet(Number(event.target.value))}><option value="5">5 ft / 1,5 m</option><option value="10">10 ft / 3 m</option><option value="20">20 ft / 6 m</option></select></label><button className="button secondary" disabled={!image} onClick={() => send("map:update", { image, name, visible: value.visible, tokens, measurements, gridFeet })}>Salvar mapa</button></section>}
-    {isGM && <section className="surface tactical-toolbar"><div className="tool-options">{[["pan", "Mover mapa"], ["line", "Régua"], ["circle", "Raio"], ["cone", "Cone"], ["square", "Quadrado"]].map(([key, label]) => <button key={key} className={"button " + (tool === key ? "primary" : "quiet")} onClick={() => setTool(key)}>{label}</button>)}</div><span>Uma quadrícula equivale a {gridFeet} ft · {Math.round(gridFeet * .3048 * 10) / 10} m</span><button className="text-action danger" onClick={() => send("map:measure:clear", {})}>Limpar medições</button></section>}
+    {isGM && <section className="surface tactical-toolbar"><div className="tool-options">{[["pan", "Mover mapa"], ["line", "Régua"], ["circle", "Raio"], ["cone", "Cone"], ["square", "Quadrado"], ["fog", "Névoa"]].map(([key, label]) => <button key={key} className={"button " + (tool === key ? "primary" : "quiet")} onClick={() => setTool(key)}>{label}</button>)}</div><span>Uma quadrícula equivale a {gridFeet} ft · {Math.round(gridFeet * .3048 * 10) / 10} m</span><button className="text-action danger" onClick={() => send("map:measure:clear", {})}>Limpar medições</button>{value.fog?.length ? <button className="text-action danger" onClick={() => send("map:fog:set", { fog: [] })}>Limpar névoa</button> : null}</section>}
     <div className="token-carousel surface"><div className="section-eyebrow">TOKENS DA CENA</div>{candidates.length ? candidates.map(candidate => <button key={candidate.sourceId} draggable onDragStart={event => event.dataTransfer.setData("text/token", candidate.sourceId)} className={"carousel-token " + (selected?.sourceId === candidate.sourceId ? "selected" : "")} onClick={() => setSelected(candidate)}><img src={candidate.image} alt=""/><span>{candidate.name}</span></button>) : <span className="muted-copy">Crie tokens nas fichas ou adicione uma imagem ao NPC.</span>}</div>
     {image ? <div ref={stageRef} className={"map-stage tactical-map " + (drag || moving ? "dragging" : "")} onWheel={event => { event.preventDefault(); setZoom(z => Math.max(1, Math.min(3, z + (event.deltaY < 0 ? .1 : -.1)))); }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDragOver={event => event.preventDefault()} onDrop={dropToken}>
-      <div className="map-board" style={{ width:fitted.width, height:fitted.height, left:"50%",top:"50%", transform: `translate(calc(-50% + ${pan.x}px),calc(-50% + ${pan.y}px)) scale(${zoom})` }} ><img className="map-image" src={image} alt={name}/><svg className="measure-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">{measurements.map(item => measurementShape(item))}{drawing && measurementShape(drawing)}</svg>
+      <div className="map-board" style={{ width:fitted.width, height:fitted.height, left:"50%",top:"50%", transform: `translate(calc(-50% + ${pan.x}px),calc(-50% + ${pan.y}px)) scale(${zoom})` }} ><img className="map-image" src={image} alt={name}/><svg className="measure-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">{measurements.map(item => measurementShape(item))}{drawing && measurementShape(drawing)}</svg><svg className={"fog-overlay " + (isGM ? "fog-gm" : "")} viewBox="0 0 100 100" preserveAspectRatio="none">{(value.fog || []).map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h}/>)}{tool === "fog" && drawing && <rect x={Math.min(drawing.x1, drawing.x2)} y={Math.min(drawing.y1, drawing.y2)} width={Math.abs(drawing.x2 - drawing.x1)} height={Math.abs(drawing.y2 - drawing.y1)}/>}</svg>
         {tokens.map(token => { const moved = moving?.id === token.id ? moving : token; return <button data-token-id={token.id} key={token.id} className="map-token" style={{ left: moved.x + "%", top: moved.y + "%" }} title={token.name}><img src={token.image} alt=""/><span>{token.name}</span>{isGM && <i onClick={event => { event.stopPropagation(); send("map:token:delete", { id: token.id }); }}>×</i>}</button>; })}
       </div><div className="map-zoom" role="group" aria-label="Controles do mapa"><button type="button" onClick={()=>setZoom(z=>Math.max(1,z-.2))} aria-label="Reduzir zoom">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>setZoom(z=>Math.min(3,z+.2))} aria-label="Aumentar zoom">+</button><button type="button" onClick={()=>{setZoom(1);setPan({x:0,y:0});}}>Enquadrar</button></div>
     </div> : <Empty>{isGM ? "Carregue um mapa para abrir a área tática." : "O Mestre ainda não projetou um mapa."}</Empty>}

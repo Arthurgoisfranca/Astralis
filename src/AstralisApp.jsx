@@ -8,8 +8,8 @@ import { sha256Hex } from "./SharedTools.jsx";
 // Módulos da mesa (e o editor de fichas que eles importam) só são baixados ao abrir uma aba da sala.
 const loadCampaignModules = () => import("./CampaignModules.jsx");
 const campaignModule = name => lazy(() => loadCampaignModules().then(module => ({ default: module[name] })));
-const [Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, NPCs, PDFWorkshop, Sessions, Characters, Workbench] =
-  ["Agenda", "CommunityLibrary", "Diary", "GMDocuments", "GMQuickShield", "GMShield", "Handouts", "Lore", "Maps", "NPCs", "PDFWorkshop", "Sessions", "Characters", "Workbench"].map(campaignModule);
+const [Agenda, Chat, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Initiative, Lore, Maps, NPCs, PDFWorkshop, Sessions, Characters, Workbench] =
+  ["Agenda", "Chat", "CommunityLibrary", "Diary", "GMDocuments", "GMQuickShield", "GMShield", "Handouts", "Initiative", "Lore", "Maps", "NPCs", "PDFWorkshop", "Sessions", "Characters", "Workbench"].map(campaignModule);
 const moduleLoading = <p className="muted-copy" role="status">Carregando módulo…</p>;
 
 const ThemeContext=createContext({theme:'dark',toggleTheme:()=>{}});
@@ -241,7 +241,7 @@ function App({user, accountClient, openProfile}) {
   if (!roomState) return <div className="loading-screen"><div className="wordmark">Astralis</div><p>Conectando à sala…</p></div>;
 
   const isGM = identity.role === "gm";
-  const tabs = [["lobby", "Sala"], ["workbench", "Painel"]].concat(isGM ? [["gmShield", "Escudo do Mestre"]] : []).concat(MODULES.filter(([key]) => key === "gmDocs" ? isGM : isGM || roomState.modules[key]).map(([key, label]) => [key, label]));
+  const tabs = [["lobby", "Sala"], ["workbench", "Painel"], ["chat", "Chat"]].concat(isGM ? [["gmShield", "Escudo do Mestre"]] : []).concat(MODULES.filter(([key]) => key === "gmDocs" ? isGM : isGM || roomState.modules[key]).map(([key, label]) => [key, label]));
   const inviteUrl = compactInvitation(activeRoom.id,activeRoom.inviteToken) || location.origin + "/?room=" + encodeURIComponent(activeRoom.id) + "&invite=" + encodeURIComponent(activeRoom.inviteToken || "");
   const systemName=roomState.campaign.system||'';
   const systemSkin=systemName.startsWith('D&D')?'dnd':systemName.startsWith('Vampire')?'vampire':systemName==='Cairn 2e'?'cairn':systemName==='Triangle Agency'?'triangle':systemName==='Daggerheart'?'daggerheart':systemName==='Call of Cthulhu'?'cthulhu':systemName==='Sacramento'?'sacramento':systemName==='Ordem Paranormal 2'?'ordem':systemName==='Assimilação RPG'?'assimilacao':'default';
@@ -256,7 +256,8 @@ function App({user, accountClient, openProfile}) {
         {tab === "lobby" && <Lobby room={roomState} presence={presence} isGM={isGM} identity={identity} currentAvatar={user?.user_metadata?.avatar_url} inviteUrl={inviteUrl} send={send}/>}
         <Suspense fallback={moduleLoading}>
         {tab === "workbench" && <Workbench room={roomState} presence={presence} isGM={isGM} onOpen={setTab}/>}
-        {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} tracker={roomState.gmShield?.tracker} send={send}/>}
+        {tab === "chat" && <><Chat messages={roomState.chat || []} rollLog={roomState.rollLog || []} identity={identity} send={send}/><Initiative value={roomState.initiative} isGM={isGM} send={send}/></>}
+        {tab === "gmShield" && isGM && <><GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} tracker={roomState.gmShield?.tracker} send={send}/><Initiative value={roomState.initiative} isGM={isGM} send={send}/></>}
         {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send} identity={identity}/>}
         {tab === "system" && <SystemConsultations value={roomState.systemGuide} isGM={isGM} send={send}/>}
         {tab === "characters" && <Characters room={roomState} identity={identity} system={roomState.campaign.system} isGM={isGM} send={send} roll={rollDice} upload={uploadFile}/>}
