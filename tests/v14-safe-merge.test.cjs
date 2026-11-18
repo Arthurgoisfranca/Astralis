@@ -34,6 +34,8 @@ test('Global mini-player and independent queue without unmounting audio', () => 
  assert.match(source,/setDrawer\(false\)/);
 });
 test('no .env and no generated folders shipped', () => {
- assert.equal(fs.existsSync(path.join(root,'.env')),false);
- assert.equal(fs.existsSync(path.join(root,'dist')),false);
+ const ignore = read('.gitignore').split(/\r?\n/);
+ for (const entry of ['.env', 'dist/', 'node_modules/']) assert.ok(ignore.includes(entry), entry + ' ausente do .gitignore');
+ const tracked = require('node:child_process').execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split(/\r?\n/);
+ assert.ok(!tracked.some(file => file === '.env' || file.startsWith('dist/') || file.startsWith('node_modules/')));
 });

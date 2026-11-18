@@ -63,8 +63,9 @@ test('Astralis visual identity and PWA; protected working audio untouched',()=>{
  assert.match(read('src/astralisTheme.css'),/data-system-theme/);
  assert.match(read('src/AccountPanel.jsx'),/onSession/);
 });
-test('No secrets or generated directories shipped',()=>{
- assert.equal(fs.existsSync(path.join(root,'.env')),false);
- assert.equal(fs.existsSync(path.join(root,'dist')),false);
- assert.equal(fs.existsSync(path.join(root,'node_modules')),false);
+test('No secrets or generated directories shipped',async()=>{
+ const {execFileSync}=await import('node:child_process');
+ const tracked=execFileSync('git',['ls-files'],{cwd:root,encoding:'utf8'}).split(/\r?\n/);
+ assert.ok(!tracked.some(file=>file==='.env'||file.startsWith('dist/')||file.startsWith('node_modules/')));
+ assert.doesNotMatch(read('.env.example'),/sb_secret_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_-]{30,}/);
 });
