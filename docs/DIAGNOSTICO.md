@@ -153,3 +153,15 @@ Resolvidos: C1 (arquivo saiu do git; **a chave ainda precisa ser revogada no Sup
 - `npm audit`: 4 altas em `picomatch` ≤ 4.0.7 (GHSA-fc5q-39xc-vjpf), puxado por `vite`. Não há versão corrigida publicada. Só roda no build, com padrões de arquivo do próprio projeto; não chega ao navegador nem ao servidor. Reavaliar quando sair `picomatch` 4.0.8.
 - `:root` definido duas vezes no CSS e cores fixas espalhadas: resolvido no redesenho (bloco g), com tokens únicos.
 - Documentos antigos (`LEIA-PRIMEIRO-V14-PRESERVADA.md`, `REGRAS-E-ATUALIZACAO-v1.5.0.md`, `MANIFESTO-PRESERVACAO.json`, `README-1.4v.md`, `CHANGELOG-1.4v.md`): aguardando decisão do dono.
+
+## 8. Blocos c–g concluídos (v1.6.0)
+
+- **(c) Contas, papéis e convites:** papéis por mesa (mestre, co-mestre, jogador, espectador), convites com validade/limite/revogação, remoção de participante, LGPD (exportar/excluir). Migração `20261118_v16_roles.sql`.
+- **(d) Sistema "Outros":** construtor de ficha universal, fórmulas seguras sem `eval`, rolagens por campo, templates versionados, importar/exportar.
+- **(e) Agendamento:** UTC + fuso do usuário, duração, recorrência, link, RSVP.
+- **(f) Sessão:** chat com histórico de rolagens, iniciativa, névoa de guerra.
+- **(g) Design:** paleta astral 60-30-10 em tokens, fundo estelar, piso de legibilidade (corrige A11), foco e `aria-current`.
+
+**Validação final:** lint 0 erros (18 avisos de hooks pré-existentes), typecheck OK, 70 testes OK, build OK, smoke local OK.
+
+**Pendências para o dono:** revogar a chave antiga no Supabase; rodar a migração v16; avaliar `helmet`/CSP, rate limit HTTP e `picomatch` quando houver correção. Avisos de `react-hooks` a tratar numa refatoração de componentes com teste de interface.

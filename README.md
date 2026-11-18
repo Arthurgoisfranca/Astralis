@@ -59,7 +59,17 @@ O servidor Node entrega o front-end compilado e também atende a API e as conex�
 ```
 ## Sistemas suportados
 
-Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masquerade 5E / 6E, Daggerheart, Triangle Agency, Sacramento e Assimilação RPG.
+Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masquerade 5E / 6E, Vampire 6E (Alpha 2.0), Daggerheart, Triangle Agency, Sacramento, Assimilação RPG, Cairn 2e e **Outros** (ficha universal montada pelo mestre).
+
+## Scripts
+
+- `npm run dev` — API + Vite em desenvolvimento.
+- `npm start` — servidor em produção (serve o `dist`).
+- `npm run build` — compila o front-end.
+- `npm run lint` / `npm run typecheck` / `npm test` — verificações.
+- `npm run check` — roda lint, typecheck, testes e build em sequência.
+
+Papéis por mesa (mestre, co-mestre, jogador, espectador), convites com validade e limite, agendamento com fuso e RSVP, chat, iniciativa, névoa de guerra e rolagens no servidor estão documentados em `docs/FLUXO.md`. Segurança em `docs/SEGURANCA.md`, identidade visual em `docs/DESIGN.md`.
 
 ## Variáveis de ambiente
 

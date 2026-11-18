@@ -1,6 +1,6 @@
 {
   "name": "astralis",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "private": true,
   "description": "Gestão de campanhas e lobby de RPG em tempo real",
   "engines": {
