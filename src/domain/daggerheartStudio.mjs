@@ -1,6 +1,8 @@
 import catalog from './daggerheartCatalog.json' with { type: 'json' };
 import { daggerheart } from './diceEngines.mjs';
 import { die } from './manualRules.mjs';
+import { communityNotes } from './daggerheartHeritage.mjs';
+import { VOID_CLASSES, VOID_DREAD, bloodHunterPdf, summonerPdf } from './daggerheartVoid.mjs';
 
 export const DH_SYSTEM = 'Daggerheart';
 export const DH_BUILD = 'daggerheartBuild';
@@ -9,7 +11,10 @@ export const DH_DETAILS = 'daggerheartDetails';
 export const draftKey = id => `astralis:daggerheart:draft:${id}`;
 export const CLASSES = catalog.classes;
 export const ANCESTRIES = catalog.ancestries;
-export const COMMUNITIES = catalog.communities;
+export const COMMUNITIES = Object.fromEntries(Object.entries(catalog.communities).map(([id, community]) => {
+  const [description, benefit] = communityNotes[id];
+  return [id, { ...community, description, benefit }];
+}));
 export const TRANSFORMATIONS = catalog.transformations;
 export const TRAITS = {
   agility: ['Agilidade', 'Correr, saltar, manobrar'], strength: ['Força', 'Erguer, quebrar, agarrar'],
@@ -17,13 +22,16 @@ export const TRAITS = {
   presence: ['Presença', 'Encantar, interpretar, enganar'], knowledge: ['Conhecimento', 'Recordar, analisar, entender'],
 };
 export const TRAIT_KEYS = Object.keys(TRAITS);
-export const SOURCE = { core: 'Livro Básico', hope: 'Hope & Fear', void4: 'The Void 1.4 · Blood Hunter', void5: 'The Void 1.5 · Summoner' };
+export const SOURCE = { core: 'Livro Básico', hope: 'Hope & Fear', void15: 'The Void v1.5 · julho de 2025',
+  void4: 'The Void · Blood Hunter', void5: 'The Void · Summoner' };
 export const DISTANCES = { Melee: 'Corpo a corpo', 'Very Close': 'Muito perto', Close: 'Perto', Far: 'Longe', 'Very Far': 'Muito longe' };
 export const CARD_KINDS = { Spell: 'Magia', Ability: 'Habilidade', Grimoire: 'Grimório' };
 const SRD_PDF = 'https://www.daggerheart.com/wp-content/uploads/2026/08/DH_SRD_2_2026_08_25.pdf';
-const VOID_BLOOD_PDF = 'https://www.daggerheart.com/wp-content/uploads/2026/07/Summoner_Void_2026_07_09.pdf';
 export const CARDS = Object.fromEntries(Object.entries(catalog.cards).map(([id, [name, level, domain, kind, recall, page]]) =>
-  [id, { id, name, level, domain, kind, recall, reference: `${domain === 'Blood' ? VOID_BLOOD_PDF : SRD_PDF}#page=${page}` }]));
+  [id, { id, name, level, domain, kind, recall, source: domain === 'Blood' ? 'void5' : domain === 'Dread' ? 'hope' : 'core',
+    reference: `${domain === 'Blood' ? summonerPdf : SRD_PDF}#page=${page}` }]));
+const publishedCards = Object.values(CARDS);
+const playtestCards = publishedCards.map(card => VOID_DREAD[card.id] ?? card);
 export const WEAPONS = Object.fromEntries(Object.entries(catalog.weapons).map(([id, [name, slot, tier, trait, range, faces, bonus, damage, hands, feature]]) =>
   [id, { id, name, slot, tier, trait, range, faces, bonus, damage, hands, feature }]));
 export const ARMOR = Object.fromEntries(Object.entries(catalog.armor).map(([id, [name, tier, major, severe, score, feature]]) =>
@@ -33,11 +41,11 @@ export const CONDITIONS = ['Vulnerável', 'Contido', 'Oculto'];
 export const POTIONS = { health: 'Poção menor de vida', stress: 'Poção menor de vigor' };
 export const KIT = ['Tocha', 'Corda de 15 m', 'Suprimentos básicos'];
 export const CLASS_GEAR = {
-  assassin: ['Lista com nomes riscados', 'Frasco de veneno'], bard: ['Romance', 'Carta selada'],
-  brawler: ['Bandagens de um mentor', 'Manual de combate'], druid: ['Bolsa de pedras e ossos', 'Amuleto de um mentor'],
+  assassin: ['Lista com nomes riscados', 'Lâmina enferrujada com uma insígnia'], bard: ['Romance', 'Carta selada'],
+  brawler: ['Bandagens de um mentor', 'Livro sobre seu passatempo secreto'], druid: ['Bolsa de pedras e ossos', 'Amuleto de um mentor'],
   guardian: ['Totem de um mentor', 'Chave secreta'], ranger: ['Troféu da primeira caça', 'Ovo aparentemente quebrado'],
   rogue: ['Estojo de falsificação', 'Gancho de escalada'], seraph: ['Oferendas', 'Símbolo de sua divindade'],
-  sorcerer: ['Orbe sussurrante', 'Herança de família'], warlock: ['Escultura do patrono', 'Objeto do patrono'],
+  sorcerer: ['Orbe sussurrante', 'Herança de família'], warlock: ['Escultura do patrono', 'Anel impossível de remover'],
   warrior: ['Retrato de alguém amado', 'Pedra de amolar'], witch: ['Mascote inofensivo', 'Pedra de vidência'],
   wizard: ['Livro por traduzir', 'Objeto aparentemente inútil'], 'blood-hunter': ['Diário de pesquisa', 'Lembrança de uma caçada'],
   summoner: ['Frasco com espírito inofensivo', 'Par de moedas misteriosas'],
@@ -60,9 +68,27 @@ export const CLASS_HINTS = {
   summoner: 'Convoca entidades de outros planos para agir a seu lado.',
 };
 export const CARD_HINTS = {
-  'dread-blighting-strike': 'Ataque mágico à distância. Em um sucesso, causa dano e corta pela metade o próximo ataque bem-sucedido do alvo.',
-  'dread-umbral-veil': 'Uma vez por descanso, marque Estresse para criar proteção sombria. Use fichas de sombra para reduzir ataques contra você.',
-  'dread-voice-of-dread': 'Uma Conjuração bem-sucedida faz o alvo marcar Estresse e ficar temporariamente Contido.',
+  'dread-blighting-strike': 'Conjure contra um alvo Longe. No acerto, use d6+1 com Esperança ou d10+1 com Medo e reduza à metade o dano do próximo ataque bem-sucedido do alvo. Na falha, gaste Esperança ou marque Estresse.',
+  'dread-umbral-veil': 'Uma vez por descanso, marque Estresse e ganhe fichas de sombra iguais ao Medo do mestre. Gaste fichas para dar −1 por ficha a um ataque contra você. Limpe as fichas no fim da cena.',
+  'dread-voice-of-dread': 'Uma Conjuração bem-sucedida faz o alvo visível marcar Estresse e ficar temporariamente Contido.',
+  'dread-hideous-retribution': 'Quando um alvo visível ferir um aliado Perto, faça uma reação de Conjuração. Se passar, marque Estresse para causar dano mágico de d6 com Proficiência.',
+  'dread-siphon-essence': 'Uma vez por descanso longo, acerte uma Conjuração contra um alvo Muito Perto. Cause dano mágico de d12+4 com Proficiência e recupere tantos PV quanto o alvo marcar. Com Medo, some +1 à Proficiência.',
+  'dread-shared-trauma': 'Uma vez por descanso, transfira uma quantidade de PV marcados entre duas criaturas voluntárias a alcance corpo a corpo.',
+  'dread-terrify': 'Acerte uma Conjuração contra um alvo Perto para que ele marque 1d4 Estresse. Você pode fazê-lo recuar uma faixa de alcance. Com Medo, ele também fica temporariamente Vulnerável.',
+  'dread-chains-of-affliction': 'Marque 2 Estresse para acorrentar temporariamente um alvo Perto. A criatura que sofrer dano dele marca 1 PV a menos. Só um alvo pode ficar acorrentado.',
+  'dread-horror': 'Uma vez por cena, marque Estresse para invocar uma criatura que causa d8+1 de dano mágico com seu atributo de Conjuração contra um alvo Longe. Se ele marcar PV e falhar na reação de dificuldade 12, marca o mesmo número de Estresse.',
+  'dread-dire-strike': 'Se seu ataque fizer o alvo marcar PV, você pode gastar 1 Esperança para que o mestre perca 1 Medo.',
+  'dread-spectral-mist': 'Gaste 2 Esperança para tornar você e aliados Perto incorpóreos. Podem atravessar objetos e ignoram dano físico até agirem, atravessarem um objeto ou a cena acabar.',
+  'dread-darkfire': 'Uma vez por cena, gaste Esperança para atingir um adversário Perto por ponto gasto. Cada alvo faz uma reação de dificuldade 15 para receber metade do dano mágico de d8+6 com seu atributo de Conjuração.',
+  'dread-jump-scare': 'Marque Estresse após causar dano mágico para se teleportar até alcance corpo a corpo do alvo. Ele fica Vulnerável até marcar PV.',
+  'dread-dread-touched': 'Com quatro cartas Dread ativas, marque 2 Estresse em um sucesso com Medo para impedir que o mestre ganhe Medo. Uma vez por descanso, some o Medo atual do mestre à sua ação.',
+  'dread-wall-of-hunger': 'Passe em Conjuração de dificuldade 10 e gaste Esperança para traçar uma muralha entre dois pontos até Longe. Quem estiver nela ou a atravessar marca 2 Estresse.',
+  'dread-dark-army': 'Uma vez por descanso longo, passe em Conjuração de dificuldade 14 para receber oito fichas. Cada ficha soma 1d8 ao dano causado Muito Perto ou reduz em 1d8 o dano recebido. O descanso limpa as fichas.',
+  'dread-eldritch-flesh': 'Some +1 aos limiares por Estresse marcado. Quando rolar com Medo, você pode gastar 2 Esperança para recuperar um espaço de armadura.',
+  'dread-damnation': 'Acerte Conjuração contra um alvo Longe e role 1d20 de dano mágico por Estresse marcado para esse efeito. Se derrotá-lo, adversários ao alcance Longe dele marcam Estresse.',
+  'dread-savor-the-anguish': 'Limpe 1 Estresse quando um adversário Perto sofrer dano grave.',
+  'dread-avatar-of-terror': 'Marque Estresse para assumir uma forma que soma 1d6 de dano por Medo do mestre. Ganhe Esperança quando ele gastar Medo para dar destaque a um adversário Muito Perto. Manter a forma em cada ação custa 1 Esperança.',
+  'dread-invoke-torment': 'Cause o dobro de dano a alvos com todo o Estresse marcado. Ganhe 1 Esperança quando um adversário Perto cair nessas condições.',
   'sage-vicious-entangle': 'Raízes atingem e podem conter o alvo após uma conjuração bem-sucedida.',
   'sage-gifted-tracker': 'Use Esperança para seguir vestígios de uma criatura por meio de perguntas ao mestre.',
   'sage-nature-s-tongue': 'Permite se comunicar com seres e elementos da natureza.',
@@ -117,10 +143,32 @@ export const FEATURE_HINTS = {
   Fearless: 'Após rolar com Medo, você pode marcar 2 Estresse para trocar o resultado por Esperança.',
   'Dread Visage': 'Você tem vantagem para intimidar criaturas hostis.',
   'Found Family': 'Uma vez por descanso, gaste 1 Esperança para usar uma Experiência de um aliado.',
-  'Crimson Rite': 'Marque 1 PV para encantar uma arma ativa com dano mágico adicional até o próximo descanso.',
-  'Grim Psychometry': 'Uma conjuração de dificuldade 12 pode revelar quem cometeu o último ato violento no local.',
-  'Summon Entity': 'Marque Estresse para convocar entidades. O patamar limita quantas chegam de cada vez e o nível limita o total.',
+  'Crimson Rite': 'Marque 1 PV para encantar uma arma ativa até o fim do próximo descanso ou até usar o rito de novo. Seus acertos com ela somam 1d4 de dano mágico por patamar.',
+  'Grim Psychometry': 'Passe em Conjuração de dificuldade 12 para inspecionar um local Muito Perto e ver a última criatura que cometeu violência ali. Tenha vantagem para rastreá-la ou lembrar informações sobre ela até o próximo descanso longo ou até usar a habilidade de novo.',
+  'Summon Entity': 'Marque Estresse para convocar entidades em número igual ao patamar, até o limite total do seu nível. Trabalham Muito Perto e só exigem Conjuração quando a tarefa exigiria um teste. Um Espírito do Destino pode forçar um adversário Muito Perto a repetir um ataque bem-sucedido e desaparece em seguida.',
 };
+
+export const usesVoid = sources => typeof sources?.void15 === 'boolean' ? sources.void15 : Boolean(sources?.void4 || sources?.void5);
+export function classInfo(build, id = build.classId) {
+  if (!Object.hasOwn(CLASSES, id)) return undefined;
+  const official = CLASSES[id];
+  if (usesVoid(build.sources) && Object.hasOwn(VOID_CLASSES, id)) return { ...official, ...VOID_CLASSES[id], source: 'void15' };
+  if (official.source === 'void4' || official.source === 'void5') return { ...official,
+    reference: official.source === 'void4' ? bloodHunterPdf : summonerPdf };
+  return official;
+}
+export const classGear = build => classInfo(build)?.gear ?? CLASS_GEAR[build.classId] ?? [];
+export const hasClassGear = build => Boolean(build.gear.trim()) && (classGear(build).includes(build.gear) ||
+  !VOID_CLASSES[build.classId]?.gear.includes(build.gear) && classInfo(build)?.source !== 'void15');
+export const featureDescription = (info, name) => info?.descriptions?.[name] ?? FEATURE_HINTS[name];
+export const domainCards = sources => usesVoid(sources) ? playtestCards : publishedCards;
+export const cardInfo = (id, sources) => usesVoid(sources) && Object.hasOwn(VOID_DREAD, id) ? VOID_DREAD[id] : CARDS[id];
+export const cardDescription = card => card.description ?? CARD_HINTS[card.id];
+export function weaponInfoFor(build, id) {
+  const weapon = WEAPONS[id];
+  return id === 'primary-scepter' && build.classId === 'warlock' && usesVoid(build.sources)
+    ? { ...weapon, damage: 'phy' } : weapon;
+}
 
 const has = (object, key) => Object.hasOwn(object, key);
 const text = (value, max = 100) => typeof value === 'string' ? value.slice(0, max) : '';
@@ -143,12 +191,12 @@ export function parseJson(value) {
 export function emptyBuild() {
   return { v: 1, level: 1, classId: '', subclass: '', traits: ['', '', '', ''], ancestry: '', mixed: '', mixedMode: false, community: '',
     transformation: '', primary: '', secondary: '', armor: '', potion: '', gear: '', cards: [], experiences: ['', ''],
-    advances: [], sources: { hope: true, void4: false, void5: false } };
+    advances: [], sources: { hope: true, void15: false, void4: false, void5: false } };
 }
 
 const CATEGORIES = { hp: 'PV +1', stress: 'Estresse +1', evasion: 'Evasão +1', traits: 'Dois atributos +1',
   experience: 'Duas Experiências +1', card: 'Carta adicional', subclass: 'Carta de subclasse',
-  proficiency: 'Proficiência +1 (2 escolhas)', multiclass: 'Multiclasse (2 escolhas)' };
+  proficiency: 'Proficiência +1 (2 escolhas)', multiclass: 'Multiclasse (2 escolhas)', combo: 'Aumentar dado de combo' };
 export const ADVANCEMENTS = CATEGORIES;
 
 export function readBuild(value) {
@@ -156,8 +204,10 @@ export function readBuild(value) {
   if (row?.v !== 1) return emptyBuild();
   const classId = inCatalog(CLASSES, row.classId);
   const level = integer(row.level, 1, 10);
+  const sources = { hope: row.sources?.hope !== false, void15: usesVoid(row.sources),
+    void4: row.sources?.void4 === true, void5: row.sources?.void5 === true };
   return {
-    ...emptyBuild(), level, classId, subclass: inCatalog(CLASSES[classId]?.subclasses ?? {}, row.subclass),
+    ...emptyBuild(), level, classId, subclass: inCatalog(classInfo({ classId, sources })?.subclasses ?? {}, row.subclass),
     traits: Array.from({ length: 4 }, (_, i) => inCatalog(TRAITS, row.traits?.[i])),
     ancestry: inCatalog(ANCESTRIES, row.ancestry), mixed: inCatalog(ANCESTRIES, row.mixed), mixedMode: row.mixedMode === true || Boolean(row.mixed),
     community: inCatalog(COMMUNITIES, row.community), transformation: inCatalog(TRANSFORMATIONS, row.transformation),
@@ -171,7 +221,7 @@ export function readBuild(value) {
         a: text(choice?.a, 60), b: text(choice?.b, 60), c: text(choice?.c, 60),
       })) };
     }),
-    sources: { hope: row.sources?.hope !== false, void4: row.sources?.void4 === true, void5: row.sources?.void5 === true },
+    sources,
   };
 }
 
@@ -181,7 +231,8 @@ export function readDetails(value) {
   return Object.fromEntries(fields.map(key => [key, text(row?.[key], ['pronouns', 'frame', 'focus'].includes(key) ? 80 : 145)]));
 }
 
-export const canUseClass = (info, sources) => !!info && (info.source === 'core' || sources[info.source] === true);
+export const canUseClass = (info, sources) => !!info && (info.source === 'core' ||
+  (info.source === 'void15' ? usesVoid(sources) : sources?.[info.source] === true));
 export const traitAllocation = ['+2', '+1', '+1', '−1'];
 const traitValues = [2, 1, 1, -1];
 export function baseTraits(build) {
@@ -190,25 +241,28 @@ export function baseTraits(build) {
   return initial;
 }
 export function suggestedTraits(build) {
+  const info = classInfo(build);
+  if (info?.suggested) return info.suggested;
   if (build.classId === 'witch') return ['instinct', 'presence', 'knowledge', 'strength'];
-  const cast = CLASSES[build.classId]?.subclasses[build.subclass]?.spellcast;
+  const cast = info?.subclasses[build.subclass]?.spellcast;
   const high = cast || (['warrior', 'guardian', 'brawler'].includes(build.classId) ? 'strength' : 'agility');
   return unique([high, 'agility', 'instinct', 'finesse', 'presence', 'knowledge', 'strength']).slice(0, 4);
 }
 
-export function availableCards(main, level, secondary = '', secondaryDomain = '') {
-  return Object.values(CARDS).filter(card => card.level <= level && (main?.domains.includes(card.domain) ||
+export function availableCards(main, level, secondary = '', secondaryDomain = '', sources) {
+  return domainCards(sources).filter(card => card.level <= level && (main?.domains.includes(card.domain) ||
     (secondary && card.domain === secondaryDomain && card.level <= Math.ceil(level / 2))));
 }
 
-const perTier = { traits: 3, hp: 2, stress: 2, experience: 1, card: 1, evasion: 1, subclass: 1, proficiency: 1, multiclass: 1 };
+const perTier = { traits: 3, hp: 2, stress: 2, experience: 1, card: 1, evasion: 1, subclass: 1, proficiency: 1, multiclass: 1, combo: 1 };
 export function progression(build) {
-  const main = CLASSES[build.classId];
+  const main = classInfo(build);
   const traits = baseTraits(build), marked = new Set();
   const experiences = build.experiences.map(name => ({ name, bonus: 2 }));
-  const known = from(build.cards, CARDS, 2).filter(id => CARDS[id].level === 1 && main?.domains.includes(CARDS[id].domain));
+  const starterCards = new Set(availableCards(main, 1, '', '', build.sources).map(card => card.id));
+  const known = from(build.cards, CARDS, 2).filter(id => starterCards.has(id));
   const pending = {}, used = {};
-  let hp = 0, stress = 0, evasion = 0, prof = 1, rank = 0, secondClass = '', secondDomain = '', secondSubclass = '';
+  let hp = 0, stress = 0, evasion = 0, prof = 1, rank = 0, combo = 4, secondClass = '', secondDomain = '', secondSubclass = '';
   for (let level = 2; level <= build.level; level++) {
     const row = build.advances[level - 2] ?? {}, tier = tierFor(level);
     let missing = 0, picks = 0;
@@ -234,7 +288,7 @@ export function progression(build) {
         experiences[b].bonus++;
       }
       if (kind === 'card') {
-        const options = availableCards(main, level, secondClass, secondDomain);
+        const options = availableCards(main, level, secondClass, secondDomain, build.sources);
         if (known.includes(a) || !options.some(card => card.id === a)) continue;
         known.push(a);
       }
@@ -243,7 +297,7 @@ export function progression(build) {
         rank++;
       }
       if (kind === 'multiclass') {
-        const extra = CLASSES[a];
+        const extra = classInfo(build, a);
         if (secondClass || used[`${slot}:subclass`] || a === build.classId || !canUseClass(extra, build.sources) ||
           !extra.domains.includes(b) || main?.domains.includes(b) || !has(extra.subclasses, c)) continue;
         secondClass = a;
@@ -254,28 +308,32 @@ export function progression(build) {
       if (kind === 'stress') stress++;
       if (kind === 'evasion') evasion++;
       if (kind === 'proficiency') prof++;
+      if (kind === 'combo') {
+        if (build.classId !== 'brawler' || main.source !== 'void15') continue;
+        combo += 2;
+      }
       used[key] = (used[key] ?? 0) + 1;
       picks += cost;
     }
-    const options = availableCards(main, level, secondClass, secondDomain);
+    const options = availableCards(main, level, secondClass, secondDomain, build.sources);
     if (row.card && !known.includes(row.card) && options.some(card => card.id === row.card)) known.push(row.card);
     else missing++;
     pending[level] = missing + 2 - picks;
   }
-  return { traits, experiences, known, pending, hp, stress, evasion, proficiency: Math.min(6, prof), rank, secondClass, secondDomain, secondSubclass };
+  return { traits, experiences, known, pending, hp, stress, evasion, proficiency: Math.min(6, prof), rank, combo, secondClass, secondDomain, secondSubclass };
 }
 
 export function builderStatus(build, name, details = {}) {
-  const cls = CLASSES[build.classId], sub = cls?.subclasses[build.subclass], advance = progression(build);
-  const primary = WEAPONS[build.primary], secondary = WEAPONS[build.secondary];
+  const cls = classInfo(build), sub = cls?.subclasses[build.subclass], advance = progression(build);
+  const primary = weaponInfoFor(build, build.primary), secondary = weaponInfoFor(build, build.secondary);
   const weaponLegal = weapon => weapon?.tier === 1 && (weapon.damage === 'phy' || sub?.spellcast);
   const weapons = weaponLegal(primary) && primary.slot === 'primary'
     ? primary.hands === 2 && !secondary || (primary.hands === 1 || build.classId === 'warrior') && weaponLegal(secondary) && secondary.slot === 'secondary' ? 2 : 1 : 0;
   const remaining = {
     subclass: Number(!sub), traits: 4 - new Set(build.traits.filter(Boolean)).size, weapons: 2 - weapons,
-    armor: Number(ARMOR[build.armor]?.tier !== 1), inventory: Number(!build.potion) + Number(!build.gear.trim()) +
+    armor: Number(ARMOR[build.armor]?.tier !== 1), inventory: Number(!build.potion) + Number(!hasClassGear(build)) +
       Number(build.classId === 'witch' && !details.focus?.trim()),
-    cards: 2 - build.cards.filter(id => CARDS[id]?.level === 1 && cls?.domains.includes(CARDS[id].domain)).length,
+    cards: 2 - availableCards(cls, 1, '', '', build.sources).filter(card => build.cards.includes(card.id)).length,
   };
   return {
     remaining,
@@ -287,11 +345,12 @@ export function builderStatus(build, name, details = {}) {
 }
 
 export function derive(build, play = {}) {
-  const cls = CLASSES[build.classId], sub = cls?.subclasses[build.subclass], advance = progression(build);
-  const extra = CLASSES[advance.secondClass]?.subclasses[advance.secondSubclass];
+  const cls = classInfo(build), sub = cls?.subclasses[build.subclass], advance = progression(build);
+  const extraClass = classInfo(build, advance.secondClass);
+  const extra = extraClass?.subclasses[advance.secondSubclass];
   const spellcast = sub?.spellcast || extra?.spellcast || '';
-  const armor = ARMOR[play.armor ?? build.armor], primary = WEAPONS[play.primary ?? build.primary];
-  const secondary = WEAPONS[play.secondary ?? build.secondary];
+  const armor = ARMOR[play.armor ?? build.armor], primary = weaponInfoFor(build, play.primary ?? build.primary);
+  const secondary = weaponInfoFor(build, play.secondary ?? build.secondary);
   const traits = { ...advance.traits };
   const armorEffects = {
     Flexible: [1, '', 0], Cumbersome: [0, 'finesse', -1], Heavy: [-1, '', 0], Bulky: [-1, '', 0], 'Very Heavy': [-2, 'agility', -1],
@@ -312,18 +371,26 @@ export function derive(build, play = {}) {
   const ancestry = ANCESTRIES[build.ancestry], mixed = ANCESTRIES[build.mixed];
   const ancestryFeatures = mixed ? [ancestry?.features[0], mixed.features[1]].filter(Boolean) : ancestry?.features ?? [];
   const communityFeatures = COMMUNITIES[build.community]?.features ?? [];
-  return { ...advance, cls, sub, extra, spellcast, traits, armor, primary, secondary, major, severe, ancestryFeatures, communityFeatures,
-    evasion: Math.max(0, (cls?.evasion ?? 10) + advance.evasion + bonusEvasion - sluggish + (play.uses?.includes('rogue-dodge') ? 2 : 0)),
+  const voidBrawler = build.classId === 'brawler' && cls.source === 'void15';
+  const bareBrawler = voidBrawler && !activeWeapons.length;
+  const unarmed = bareBrawler ? { ...UNARMED, faces: build.subclass === 'juggernaut' ? 10 : 8, extraFaces: 6 } : UNARMED;
+  const rugged = voidBrawler && build.subclass === 'juggernaut' && advance.rank >= 1;
+  return { ...advance, cls, sub, extra, extraClass, spellcast, traits, armor, primary, secondary, unarmed,
+    major, severe: severe + (rugged ? 3 : 0), ancestryFeatures, communityFeatures,
+    evasion: Math.max(0, (cls?.evasion ?? 10) + advance.evasion + bonusEvasion - sluggish + Number(bareBrawler) + (play.uses?.includes('rogue-dodge') ? 2 : 0)),
     maxArmor: integer((armor?.score ?? (barefoot ? 3 + traits.strength : 0)) + shield, 0, 12),
     maxHP: integer((cls?.hp ?? 6) + advance.hp, 1, 12),
     maxStress: integer(6 + advance.stress + Number(ancestryFeatures.includes('High Stamina')), 1, 12) };
 }
 
 export function startingPlay(build) {
+  const voidWarlock = build.classId === 'warlock' && usesVoid(build.sources);
   return { v: 1, hp: 0, stress: 0, hope: 2, usedArmor: 0, conditions: [], cards: progression(build).known.slice(0, 5),
     primary: build.primary, secondary: build.secondary, armor: build.armor,
     weapons: [build.primary, build.secondary].filter(Boolean), armors: [build.armor].filter(Boolean),
-    items: [...KIT, POTIONS[build.potion], build.gear].filter(Boolean), gold: [1, 0, 0], uses: [], tokens: 0, shadows: 0, shorts: 0 };
+    items: [...KIT, POTIONS[build.potion], build.gear, build.community === 'wanderborne' ? 'Mochila nômade' : ''].filter(Boolean),
+    gold: [1, 0, 0], uses: [], tokens: 0, shadows: 0, shorts: 0,
+    ...(voidWarlock ? { favor: 3, patron: '', spheres: ['', ''] } : {}) };
 }
 
 export function readPlay(value, build) {
@@ -332,7 +399,7 @@ export function readPlay(value, build) {
   if (row?.v !== 1) return initial;
   const weapons = from(row.weapons, WEAPONS, 20), armors = from(row.armors, ARMOR, 15);
   const derived = derive(build, row);
-  const eligible = id => !!WEAPONS[id] && (WEAPONS[id].damage === 'phy' || !!derived.spellcast);
+  const eligible = id => !!WEAPONS[id] && (weaponInfoFor(build, id).damage === 'phy' || !!derived.spellcast);
   const primary = weapons.includes(row.primary) && WEAPONS[row.primary].slot === 'primary' && eligible(row.primary) ? row.primary : '';
   const secondary = (WEAPONS[primary]?.hands !== 2 || build.classId === 'warrior') && weapons.includes(row.secondary) && WEAPONS[row.secondary].slot === 'secondary' && eligible(row.secondary) ? row.secondary : '';
   const armor = armors.includes(row.armor) ? row.armor : '';
@@ -344,7 +411,10 @@ export function readPlay(value, build) {
     items: list(row.items).map(value => text(value, 55)).filter(Boolean).slice(0, 16),
     gold: initial.gold.map((_, i) => integer(row.gold?.[i], 0, 99)),
     uses: unique(list(row.uses).map(value => text(value, 45)).filter(Boolean)).slice(0, 12),
-    tokens: integer(row.tokens, 0, 6), shadows: integer(row.shadows, 0, 12), shorts: integer(row.shorts, 0, 3) };
+    tokens: integer(row.tokens, 0, build.classId === 'witch' && usesVoid(build.sources) ? 1 : 6),
+    shadows: integer(row.shadows, 0, 12), shorts: integer(row.shorts, 0, 3),
+    ...(initial.favor != null ? { favor: integer(row.favor ?? initial.favor), patron: text(row.patron, 55),
+      spheres: [text(row.spheres?.[0], 45), text(row.spheres?.[1], 45)] } : {}) };
 }
 
 export function damageTaken(amount, stats, mitigation = false, massive = false) {
@@ -356,9 +426,17 @@ export function damageTaken(amount, stats, mitigation = false, massive = false) 
 export function weaponDamage(weapon, proficiency, critical = false, random = Math.random) {
   const powerful = ['Massive', 'Powerful'].includes(weapon.feature);
   const dice = Array.from({ length: proficiency + Number(powerful) }, () => die(weapon.faces, random));
+  const extra = weapon.extraFaces ? Array.from({ length: proficiency }, () => die(weapon.extraFaces, random)) : [];
   const total = dice.reduce((sum, value) => sum + value, weapon.bonus) - (powerful ? Math.min(...dice) : 0) +
-    (critical ? weapon.faces * proficiency : 0);
-  return { dice, total, label: weapon.name, title: critical ? 'Dano crítico' : 'Dano', detail: `${proficiency}d${weapon.faces}${signed(weapon.bonus)}` };
+    extra.reduce((sum, value) => sum + value, 0) + (critical ? (weapon.faces + (weapon.extraFaces ?? 0)) * proficiency : 0);
+  return { dice: [...dice, ...extra], total, label: weapon.name, title: critical ? 'Dano crítico' : 'Dano',
+    detail: `${proficiency}d${weapon.faces}${weapon.extraFaces ? `+${proficiency}d${weapon.extraFaces}` : ''}${signed(weapon.bonus)}` };
+}
+
+export function rollCombo(faces, random = Math.random) {
+  const dice = [die(faces, random), die(faces, random)];
+  while (dice.at(-1) >= dice.at(-2)) dice.push(die(faces, random));
+  return dice;
 }
 
 export function duality({ title, trait = 0, bonus = 0, mode = 'normal', difficulty, reaction = false }, random = Math.random) {
@@ -377,21 +455,27 @@ export function resolveDuality(play, roll, stats, convert = false) {
     stress: integer(play.stress + (convert ? 2 : 0) - Number(roll.critical), 0, stats.maxStress) };
 }
 
-export function readyCard(play, id, store = '', free = false, maxStress = 6) {
-  if (!CARDS[id] || play.cards.includes(id) || (play.cards.length >= 5 && !play.cards.includes(store))) return null;
-  const cost = free ? 0 : CARDS[id].recall;
+export function readyCard(play, id, store = '', free = false, maxStress = 6, sources) {
+  const card = cardInfo(id, sources);
+  if (!card || play.cards.includes(id) || (play.cards.length >= 5 && !play.cards.includes(store))) return null;
+  const cost = free ? 0 : card.recall;
   if (play.stress + cost > maxStress) return null;
   return { ...play, stress: play.stress + cost, cards: [...play.cards.filter(card => card !== store), id] };
 }
 
 export function rest(play, build, long, actions, random = Math.random) {
   if ((!long && play.shorts >= 3) || actions.length > 2) return null;
-  const next = { ...play, shorts: long ? 0 : play.shorts + 1, tokens: 0, shadows: 0,
+  const carriesTalisman = build.classId === 'witch' && build.subclass === 'hedge' && usesVoid(build.sources);
+  const next = { ...play, shorts: long ? 0 : play.shorts + 1, tokens: carriesTalisman ? play.tokens : 0, shadows: 0,
     uses: long ? [] : play.uses.filter(key => key === 'commune') };
+  if (next.favor != null && actions.includes('tithe')) {
+    next.favor = integer(next.favor + Math.max(0, progression(build).traits.presence));
+  }
   for (const move of actions) {
     if (move === 'prepare' || move === 'together') next.hope = integer(next.hope + (move === 'together' ? 2 : 1), 0, HOPE_MAX);
     else if (['hp', 'stress', 'usedArmor'].includes(move)) next[move] = long ? 0 : Math.max(0, next[move] - tierFor(build.level) - die(4, random));
   }
+  if (build.community === 'frostborne') next.hp = Math.max(0, next.hp - 1);
   return next;
 }
 
@@ -407,8 +491,8 @@ export function storeStats(stats, build, play, details) {
     armor: `${Math.max(0, current.maxArmor - play.usedArmor)}/${current.maxArmor}`, minor: '1', major: String(current.major), severe: String(current.severe),
     experiences: current.experiences.map(row => `${row.name} ${signed(row.bonus)}`).join('\n'),
     domains: [...(current.cls?.domains ?? []), current.secondDomain].filter(Boolean).join('\n'),
-    domainCardsActive: play.cards.map(id => CARDS[id].name).join('\n'),
-    domainCardsStored: current.known.filter(id => !play.cards.includes(id)).map(id => CARDS[id].name).join('\n'),
+    domainCardsActive: play.cards.map(id => cardInfo(id, build.sources)?.name).filter(Boolean).join('\n'),
+    domainCardsStored: current.known.filter(id => !play.cards.includes(id)).map(id => cardInfo(id, build.sources).name).join('\n'),
     inventory: [...play.items, ...play.weapons.map(id => WEAPONS[id].name), ...play.armors.map(id => ARMOR[id].name)].join('\n') };
 }
 

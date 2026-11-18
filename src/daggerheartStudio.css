@@ -44,6 +44,13 @@
 .dh-current{justify-self:center;min-width:0}
 .dh-current span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dh-top>.dh-actions{grid-column:3}
+.dh-compendium{width:min(840px,calc(100% - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:clamp(12px,3vw,24px);background:var(--navy);color:inherit;border:1px solid var(--line);border-radius:14px}
+.dh-compendium::backdrop{background:#0a101cbd}
+.dh-compendium-filters,.dh-compendium-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px;margin-top:10px}
+.dh-compendium-cards a,.dh-character a{color:var(--gold)}
+.dh-compendium-cards small{color:var(--muted)}
+.dh-source-options{min-width:0;border:1px solid #adbac4;border-radius:8px;margin:8px 0 12px}
+.dh-subclass-rank,.dh-subclass-rank>span{display:block;margin:5px 0}
 .dh-avatar,.dh-studio button.dh-avatar{flex:none;width:48px;height:48px;border:1px solid var(--gold);border-radius:50%;padding:0;overflow:hidden;color:var(--gold);font:700 25px Georgia,serif}
 .dh-avatar img{width:100%;height:100%;object-fit:cover}
 .dh-current .dh-avatar{width:34px;height:34px;font-size:17px}

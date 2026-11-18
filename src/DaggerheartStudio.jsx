@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import DaggerheartBuilder, { TraitBar } from './DaggerheartBuilder.jsx';
+import DaggerheartBuilder, { Choice, Field, TraitBar, domainText } from './DaggerheartBuilder.jsx';
 import DaggerheartSheet from './DaggerheartSheet.jsx';
-import { DH_BUILD, DH_DETAILS, DH_PLAY, builderStatus, demoGabriel, derive, draftKey, parseJson,
-  readBuild, readDetails, readPlay, startingPlay, storeStats } from './domain/daggerheartStudio.mjs';
+import { DH_BUILD, DH_DETAILS, DH_PLAY, SOURCE, builderStatus, cardDescription, classInfo, demoGabriel, derive, domainCards, draftKey, normalize,
+  parseJson, readBuild, readDetails, readPlay, startingPlay, storeStats, usesVoid } from './domain/daggerheartStudio.mjs';
 import './daggerheartStudio.css';
 
 const SRD = 'https://www.daggerheart.com/srd/';
@@ -33,7 +33,54 @@ function updateStartingChoices(oldBuild, build, play) {
   if (oldBuild.subclass !== build.subclass || oldBuild.classId !== build.classId) {
     next.tokens = 0; next.shadows = 0; next.uses = [];
   }
+  if (classInfo(oldBuild)?.source !== classInfo(build)?.source) {
+    Object.assign(next, { favor: after.favor, patron: after.patron, spheres: after.spheres, tokens: 0,
+      uses: next.uses.filter(id => id !== 'talisman' && id !== 'staggering-strike') });
+  }
+  if (usesVoid(oldBuild.sources) !== usesVoid(build.sources)) {
+    next.shadows = 0;
+    next.uses = next.uses.filter(id => id !== 'dread-umbral-veil');
+  }
   return readPlay(next, build);
+}
+
+const domains = [...new Set(domainCards().map(card => card.domain))].sort();
+
+function DomainCompendium({ sources }) {
+  const dialog = useRef(null);
+  const [query, setQuery] = useState('');
+  const [domain, setDomain] = useState('');
+  const [level, setLevel] = useState('');
+  const [edition, setEdition] = useState('');
+  const [limit, setLimit] = useState(24);
+  const selectedEdition = edition || (usesVoid(sources) ? 'void' : 'published');
+  const deck = domainCards({ void15: selectedEdition === 'void' });
+  const name = normalize(query.trim());
+  const filtered = deck.filter(card => (!domain || card.domain === domain) && (!level || card.level === Number(level)) &&
+    (!name || normalize(card.name).includes(name)));
+  const filter = setter => value => { setter(value); setLimit(24); };
+  return <>
+    <button type="button" onClick={() => { setEdition(''); dialog.current?.showModal(); }}>Compêndio</button>
+    <dialog ref={dialog} className="dh-compendium" aria-labelledby="dh-compendium-title">
+      <header className="dh-between"><h2 id="dh-compendium-title">Cartas de domínio</h2>
+        <button type="button" onClick={() => dialog.current?.close()}>Fechar compêndio</button></header>
+      <div className="dh-compendium-filters">
+        <Field label="Buscar carta pelo nome" value={query} onChange={filter(setQuery)}/>
+        <Choice label="Domínio" value={domain} options={domains} placeholder="Todos os domínios" onChange={filter(setDomain)}/>
+        <Choice label="Nível" value={level} options={Array.from({ length: 10 }, (_, i) => String(i + 1))}
+          placeholder="Todos os níveis" onChange={filter(setLevel)}/>
+        <Choice label="Edição de Dread" value={selectedEdition} options={[['published', 'Hope & Fear'], ['void', 'The Void v1.5']]}
+          onChange={filter(setEdition)}/>
+      </div>
+      <p role="status">{filtered.length} de {deck.length} cartas · {domains.length} domínios</p>
+      <div className="dh-compendium-cards">{filtered.slice(0, limit).map(card => <article className="dh-effect" key={card.id}>
+        <h4>{card.name}</h4><small>{domainText(card)} · Resgate {card.recall} · {card.domain === 'Blood' ? 'The Void · julho de 2026' : SOURCE[card.source]}</small>
+        {cardDescription(card) && <p>{cardDescription(card)}</p>}
+        <p><a href={card.reference} target="_blank" rel="noreferrer">Consultar regra de {card.name}</a></p>
+      </article>)}</div>
+      {limit < filtered.length && <button type="button" onClick={() => setLimit(limit + 24)}>Ver mais cartas</button>}
+    </dialog>
+  </>;
 }
 
 export default function DaggerheartStudio({ player, form, setForm, onTokenOpen, onClose, onClassic, send, fear }) {
@@ -170,7 +217,7 @@ export default function DaggerheartStudio({ player, form, setForm, onTokenOpen, 
         </button><span>{form.name || 'Novo personagem'}</span>
       </div>}
       <div className="dh-actions">
-        <a href={SRD} target="_blank" rel="noreferrer">Regras</a>
+        <DomainCompendium sources={build.sources}/>
         <details className="dh-file" ref={menu}><summary>Arquivo</summary><div>
           <button type="button" onClick={exportJSON}>Exportar JSON</button>
           <button type="button" onClick={() => fileInput.current?.click()}>Importar JSON</button>

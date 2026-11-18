@@ -1,0 +1,157 @@
+const baseUrl = 'https://www.daggerheart.com/wp-content/uploads';
+
+export const witchPdf = `${baseUrl}/2025/07/Witch-v1.5-The-Void.pdf`;
+export const bloodHunterPdf = `${baseUrl}/2026/07/Blood_Hunter_Void_2026_07_09.pdf`;
+export const summonerPdf = `${baseUrl}/2026/07/Summoner_Void_2026_07_09.pdf`;
+
+// The archived v1.5 sheets use the same starting HP, Evasion and domain pairs as Hope & Fear.
+export const VOID_CLASSES = {
+  assassin: {
+    reference: `${baseUrl}/2025/07/Assassin-v1.5-The-Void.pdf`,
+    hope: 'Grim Resolve',
+    features: ['Marked for Death', 'Get In & Get Out'],
+    suggested: ['agility', 'finesse', 'knowledge', 'strength'],
+    equipment: ['primary-broadsword', 'secondary-shortsword', 'leather-armor'],
+    gear: ['Lista com nomes riscados', 'Almofariz e pilão com um símbolo misterioso'],
+    subclasses: {
+      'executioners-guild': { name: 'Executioners Guild', spellcast: 'agility', foundation: ['First Strike', 'Ambush'],
+        specialization: ['Death Strike', 'Scorpion’s Poise'], mastery: ['True Strike', 'Backstab'] },
+      'poisoners-guild': { name: 'Poisoners Guild', spellcast: 'knowledge', foundation: ['Toxic Concoctions', 'Envenomate'],
+        specialization: ['Poison Compendium', 'Adder’s Blessing'], mastery: ['Venomancer', 'Twin Fang'] },
+    },
+    descriptions: {
+      'Grim Resolve': 'Gaste 3 Esperança para limpar 2 Estresse.',
+      'Marked for Death': 'Depois de acertar com uma arma, marque 1 Estresse para marcar um único adversário. Seus ataques contra ele ganham +1d4 de dano por patamar. A marca acaba com a derrota do alvo, um descanso ou se o mestre gastar Medo igual à sua Proficiência.',
+      'Get In & Get Out': 'Gaste 1 Esperança para pedir ao mestre uma entrada ou saída rápida ou discreta de uma estrutura visível. Seu próximo teste que aproveitar a informação tem vantagem.',
+      'First Strike': 'Dobre o dano do primeiro ataque que acertar na cena.',
+      Ambush: 'Os dados adicionais de Marked for Death sobem de d4 para d6.',
+      'Death Strike': 'Ao causar dano grave, marque 1 Estresse para que o alvo marque 1 PV a mais.',
+      'Scorpion’s Poise': 'Ganhe +2 Evasão contra ataques do seu alvo marcado.',
+      'True Strike': 'Uma vez por descanso longo, gaste 1 Esperança para transformar um ataque que falhou em acerto.',
+      Backstab: 'Os dados adicionais da marca sobem de d6 para d8.',
+      'Toxic Concoctions': 'Marque 1 Estresse para preparar 1d4+1 doses. Gorgon Root reduz a Dificuldade em 1, Grave Spore marca Estresse e Leech Weed soma 1d6 ao dano. Limpe as doses no próximo descanso longo.',
+      Envenomate: 'Depois de acertar com uma arma, gaste uma dose para aplicar um veneno conhecido.',
+      'Poison Compendium': 'Aprenda Midnight’s Veil, que reduz ataques em 2, e Ghost Petal, que reduz o dado de dano padrão do alvo em um passo. Cada efeito permanente só se aplica uma vez ao mesmo alvo.',
+      'Adder’s Blessing': 'Você é imune a venenos e toxinas.',
+      Venomancer: 'Aprenda Blight Seed, que reduz os limiares do alvo em 3 uma vez, e Fear Leaf, que soma o dado de Medo ao dano.',
+      'Twin Fang': 'Gaste uma segunda dose para aplicar outro veneno no mesmo acerto.',
+    },
+  },
+  brawler: {
+    reference: `${baseUrl}/2025/07/Brawler-v1.5-The-Void.pdf`,
+    hope: 'Staggering Strike',
+    features: ['I Am the Weapon', 'Combo Strikes'],
+    suggested: ['instinct', 'agility', 'strength', 'knowledge'],
+    equipment: ['primary-quarterstaff', '', 'leather-armor'],
+    gear: ['Bandagens de um mentor', 'Livro sobre seu passatempo secreto'],
+    subclasses: {
+      juggernaut: { name: 'Juggernaut', spellcast: '', foundation: ['Powerhouse', 'Overwhelm'],
+        specialization: ['Rugged', 'Eye for an Eye'], mastery: ['Pummeljoy', 'Not Done Yet'] },
+      'martial-artist': { name: 'Martial Artist', spellcast: '', foundation: ['Martial Form', 'Focus'],
+        specialization: ['Keen Defenses', 'Spirit Blast'], mastery: ['Limit Breaker'] },
+    },
+    descriptions: {
+      'Staggering Strike': 'Ao acertar um ataque, gaste 3 Esperança para que o alvo marque 1 Estresse e sofra desvantagem temporária nos ataques.',
+      'I Am the Weapon': 'Sem armas equipadas, ganhe +1 Evasão. O ataque desarmado usa um atributo à escolha e causa dano físico com um d8 e um d6 por ponto de Proficiência.',
+      'Combo Strikes': 'Após rolar o dano de uma arma corpo a corpo, marque 1 Estresse e role o dado de combo até um resultado ser inferior ao anterior. Some todos os resultados obtidos ao dano. Comece no d4 e, uma vez por patamar, use um avanço para subir a d6, d8 ou d10.',
+      Powerhouse: 'Troque os d8 desarmados por d10. Marque 1 Estresse para incluir dois alvos corpo a corpo no mesmo ataque.',
+      Overwhelm: 'Ao acertar, gaste 1 Esperança para que o alvo marque Estresse ou seja arremessado até distância Perto.',
+      Rugged: 'Some +3 ao limiar grave. Powerhouse passa a alcançar até três alvos.',
+      'Eye for an Eye': 'Ao marcar mais de 1 PV por um ataque corpo a corpo, o agressor faz uma reação de dificuldade 13. Uma vez por descanso, se ele falhar, marca a mesma quantidade de PV.',
+      Pummeljoy: 'No crítico de um ataque com arma corpo a corpo, ganhe mais 1 Esperança, limpe mais 1 Estresse e some +1 à Proficiência do ataque.',
+      'Not Done Yet': 'Se um ataque fizer você marcar mais de 1 PV, ganhe 1 Esperança ou limpe 1 Estresse.',
+      'Martial Form': 'Escolha duas posturas do patamar 1. Ao chegar a um novo patamar, escolha mais duas do seu patamar ou inferiores. Consulte a folha de posturas do PDF.',
+      Focus: 'No descanso, role um d6 por ponto de Instinto e guarde o maior resultado em fichas de Foco. Gaste 1 para assumir uma postura, que acaba ao mudar de postura, sofrer dano grave, marcar o último PV ou encerrar a cena.',
+      'Keen Defenses': 'Gaste 1 Foco para impor desvantagem a um ataque que tem você como alvo.',
+      'Spirit Blast': 'Gaste 1 Foco e teste Instinto contra um adversário Perto. No acerto, cause dano mágico d20+3 com Proficiência. Gaste mais 1 Foco para deixá-lo Vulnerável temporariamente.',
+      'Limit Breaker': 'Uma vez por descanso, faça uma façanha física extraordinária sem rolar. Ganhe 1 Esperança e limpe 1 Estresse.',
+    },
+  },
+  warlock: {
+    reference: `${baseUrl}/2025/07/Warlock-v1.5-The-Void.pdf`,
+    hope: 'Patron’s Boon',
+    features: ['Warlock Patron', 'Favor'],
+    suggested: ['presence', 'agility', 'instinct', 'strength'],
+    equipment: ['primary-scepter', '', 'leather-armor'],
+    gear: ['Escultura do patrono', 'Anel impossível de remover'],
+    subclasses: {
+      'pact-of-the-endless': { name: 'Pact of the Endless', spellcast: 'presence', foundation: ['Patron’s Mantle', 'Deadly Devotion'],
+        specialization: ['Draining Invocation'], mastery: ['Dark Aegis', 'Draining Bane'] },
+      'pact-of-the-wrathful': { name: 'Pact of the Wrathful', spellcast: 'presence', foundation: ['Favored Weapon', 'Herald of Death'],
+        specialization: ['Menacing Reach', 'Diminish My Foes'], mastery: ['Fearsome Attack', 'Divine Ire'] },
+    },
+    descriptions: {
+      'Patron’s Boon': 'Gaste 3 Esperança para receber 1d4 Favor do seu patrono.',
+      'Warlock Patron': 'Escolha duas esferas de influência do patrono com o mestre. Cada uma começa em +2 e sobe em +1 a cada novo patamar. Antes de uma ação ligada a uma esfera, gaste 1 Favor para somar o bônus dela.',
+      Favor: 'Comece com 3 Favor. Durante um descanso, use uma atividade para fazer uma oferenda e receber Favor igual à Presença. Se dispensar a oferenda, o mestre recebe 1 Medo.',
+      'Patron’s Mantle': 'Marque 1 Estresse para assumir um aspecto do patrono até sofrer dano grave ou a cena acabar. Durante o efeito, você pode trocar um espaço de armadura por 2 Favor e soma o patamar a testes de intimidação.',
+      'Deadly Devotion': 'Ao acertar um ataque, gaste 1 Favor para ganhar +1 Evasão até marcar PV ou descansar.',
+      'Draining Invocation': 'Gaste 1 Favor para forçar um adversário que ataca você ou um aliado Muito Perto a usar d12 no lugar do d20. Ele marca 1 Estresse e você limpa 1 Estresse.',
+      'Dark Aegis': 'Uma vez por descanso longo, gaste 1 Favor em vez de marcar PV.',
+      'Draining Bane': 'Gaste 2 Favor quando um inimigo atacar você ou um aliado Muito Perto. Ele marca Estresse e usa d12 nos ataques enquanto estiver drenado. Você limpa 1 Estresse.',
+      'Favored Weapon': 'Marque 1 Estresse para imbuir a arma até causar dano grave. Depois de acertar, cada Favor gasto soma 1d6 ao dano.',
+      'Herald of Death': 'Gaste 1 Favor para repetir um ataque que falhou. Aceite o novo resultado e marque Estresse se falhar de novo.',
+      'Menacing Reach': 'Ao imbuir sua arma, marque 1 Estresse adicional para subir o alcance em uma faixa.',
+      'Diminish My Foes': 'Ao obter sucesso com Esperança numa ação contra um alvo, gaste 1 Esperança para que ele marque Estresse.',
+      'Fearsome Attack': 'Cada Favor gasto permite repetir qualquer quantidade dos dados de dano, inclusive dados já repetidos.',
+      'Divine Ire': 'Uma vez por descanso, ao sofrer dano, gaste Favor para fazer um adversário Perto marcar 1 PV por ponto gasto. Escolha um adversário distinto para cada ponto.',
+    },
+  },
+  witch: {
+    reference: witchPdf,
+    hope: 'Witch’s Charm',
+    features: ['Hex', 'Commune'],
+    suggested: ['instinct', 'presence', 'knowledge', 'strength'],
+    equipment: ['primary-dualstaff', '', 'gambeson-armor'],
+    gear: ['Mascote inofensivo', 'Crânio falante'],
+    subclasses: {
+      hedge: { name: 'Hedge', spellcast: 'knowledge', foundation: ['Herbal Remedies', 'Tethered Talisman'],
+        specialization: ['Walk Between Worlds', 'Enhanced Hex'], mastery: ['Circle of Power'] },
+      moon: { name: 'Moon', spellcast: 'instinct', foundation: ['Night’s Glamour'],
+        specialization: ['Moonbeam', 'Ire of Pale Light'], mastery: ['Lunar Phases'] },
+    },
+    descriptions: {
+      'Witch’s Charm': 'Gaste 3 Esperança para transformar a falha de uma ação sua ou de um aliado até distância Longe em sucesso com Medo.',
+      Hex: 'Quando uma criatura faz você ou um aliado Perto marcar PV, marque 1 Estresse para amaldiçoá-la. Testes de ação e dano contra ela ganham um bônus igual ao patamar. Só vale para um alvo por vez. Termina no fim da cena ou se o mestre gastar Medo igual à sua Conjuração.',
+      'Tethered Talisman': 'Uma vez por descanso, encante um objeto. Quando o portador sofrer dano, pode consumir o encanto para marcar 1 PV a menos. Use o talismã anterior antes de criar outro.',
+      'Walk Between Worlds': 'Passe em Conjuração de dificuldade 13 para falar com espíritos próximos. Guarde fichas iguais ao atributo de Conjuração, retire uma por resposta e volte ao mundo material ao gastar a última.',
+      'Enhanced Hex': 'Some a Proficiência ao seu dano contra criaturas amaldiçoadas.',
+      'Circle of Power': 'Uma vez por descanso, trace um círculo e atribua fichas iguais à Conjuração. Dentro dele, você e seus aliados ganham +4 aos limiares, +2 ao ataque e +1 à Evasão. Ações e ataques recebidos consomem fichas. Termina se elas acabarem ou você sair.',
+      'Night’s Glamour': 'Marque 1 Estresse para adotar um disfarce de criatura conhecida de porte semelhante ou aprimorar sua aparência para ter vantagem em testes pertinentes de Presença. Termina ao atacar, marcar PV ou descansar.',
+      Moonbeam: 'Uma vez por sessão, ilumine uma área Perto até o fim da cena. Aliados na luz ganham +1 em Conjuração e vantagem para enxergar através de ilusões.',
+      'Ire of Pale Light': 'Uma criatura amaldiçoada até distância Longe marca 1 Estresse ao errar um ataque.',
+      'Lunar Phases': 'No início da sessão, role 1d4 para determinar o efeito até o final dela. 1 permite gastar Esperança para anular dano menor, 2 dá +2 ao dano, 3 dá +2 aos limiares e 4 dá +1 Evasão.',
+    },
+  },
+};
+
+// Ordered by page in the original Dread deck. Horror keeps the released card's ID so switching editions preserves the selection.
+const dread = [
+  ['blighting-strike', 'Blighting Strike', 1, 1, 'Conjure contra um alvo Longe. No sucesso, cause dano mágico com Proficiência. Com Esperança, use d6+1 e reduza pela metade o próximo dano desse alvo contra um aliado. Com Medo, use d10+1.'],
+  ['voice-of-dread', 'Voice of Dread', 1, 0, 'Fale diretamente aos ouvidos de uma criatura visível. No sucesso da Conjuração, ela marca Estresse e fica temporariamente Vulnerável.'],
+  ['umbral-veil', 'Umbral Veil', 1, 1, 'Uma vez por descanso, depois de rolar com Medo, converta Esperança em fichas de sombra. Gaste fichas para dar −1 por ficha a um ataque contra você. Restos desaparecem no próximo descanso.'],
+  ['hideous-retribution', 'Hideous Retribution', 2, 2, 'Quando um alvo visível causar dano a um aliado Perto, faça uma reação de Conjuração. No sucesso, marque Estresse para causar dano mágico de d6 com Proficiência.'],
+  ['siphon-essence', 'Siphon Essence', 2, 1, 'Uma vez por descanso longo, acerte uma Conjuração contra um alvo Muito Perto para causar d20 de dano mágico com Proficiência e limpar tantos PV quanto ele marcar. Com Medo, some +1 à Proficiência.'],
+  ['terrify', 'Terrify', 3, 1, 'No sucesso da Conjuração contra um alvo Longe, ele marca 1d4 Estresse e pode ser forçado a recuar uma faixa. Com Medo, ele também fica temporariamente Vulnerável.'],
+  ['shared-trauma', 'Shared Trauma', 3, 1, 'Uma vez por descanso, transfira PV marcados de uma criatura voluntária para outra em alcance corpo a corpo. Você pode ocupar um dos lados.'],
+  ['chains-of-affliction', 'Chains of Affliction', 4, 2, 'Marque 2 Estresse para acorrentar temporariamente um alvo Perto. Quando ele causar dano, a vítima reduz em 1 os PV que marcaria. Só um alvo pode ficar acorrentado de cada vez.'],
+  ['horror', 'Summon Horror', 4, 2, 'Acerte uma Conjuração contra um alvo Longe e gaste Esperança para invocar uma criatura que causa d10 de dano mágico com Proficiência. O alvo faz reação de dificuldade 12 ou marca 1d4 Estresse.'],
+  ['spectral-mist', 'Spectral Mist', 5, 0, 'Marque Estresse para tornar você e alvos Perto incorpóreos. Podem atravessar objetos e ignorar dano físico. Termina ao atravessar, agir ou encerrar a cena.'],
+  ['dire-strike', 'Dire Strike', 5, 1, 'Após um acerto, gaste 2 Esperança. O mestre perde 1 Medo por PV que o alvo marcar pelo ataque.'],
+  ['darkfire', 'Darkfire', 6, 2, 'Conjure contra adversários Perto e gaste Esperança por alvo atingido. Cada um faz reação de dificuldade 14 para reduzir à metade o dano mágico de d8+6 com Proficiência.'],
+  ['jump-scare', 'Jump Scare', 6, 0, 'Depois de causar dano mágico, marque Estresse para se teleportar até alcance corpo a corpo do alvo. Ele fica Vulnerável até marcar PV.'],
+  ['dread-touched', 'Dread-Touched', 7, 2, 'Com quatro cartas de Dread ativas, você pode marcar 2 Estresse para impedir que o mestre ganhe Medo em um sucesso com Medo. Uma vez por descanso, some o Medo atual do mestre a uma rolagem de ação.', 'Ability'],
+  ['wall-of-hunger', 'Wall of Hunger', 7, 2, 'Passe em Conjuração de dificuldade 13 para erguer a muralha. Criaturas nela ou que a atravessem marcam 2 Estresse e ficam Contidas temporariamente se falharem numa reação de dificuldade 16.'],
+  ['dark-army', 'Dark Army', 8, 2, 'Uma vez por descanso longo, passe em Conjuração de dificuldade 14 para receber oito fichas. Cada uma aumenta em 1d8 o dano que você causa Muito Perto ou reduz em 1d8 o dano que recebe.'],
+  ['eldritch-flesh', 'Eldritch Flesh', 8, 1, 'Enquanto ativa, some +1 aos limiares por Estresse marcado. Ao rolar com Medo, você pode gastar 2 Esperança para recuperar um espaço de armadura.'],
+  ['damnation', 'Damnation', 9, 2, 'Ao acertar Conjuração contra um alvo Longe, marque Estresse para rolar um d20 de dano mágico por ponto. Se derrotá-lo, adversários até distância Longe do alvo marcam Estresse.'],
+  ['savor-the-anguish', 'Savor the Anguish', 9, 1, 'Quando um adversário Perto marcar Estresse ou sofrer dano grave, gaste Esperança para limpar seu Estresse ou tirar 1 Medo do mestre.'],
+  ['invoke-torment', 'Invoke Torment', 10, 2, 'Se o alvo estiver com todo o Estresse marcado, seus ataques causam dano dobrado. Derrotá-lo nessas condições limpa 1 Estresse seu.'],
+  ['avatar-of-terror', 'Avatar of Terror', 10, 1, 'Marque Estresse para uma forma que soma 1d6 ao dano por Medo do mestre. Ganhe Esperança quando ele usar uma habilidade de Medo de um adversário Perto. Cada ação na forma custa 1 Esperança.'],
+];
+
+export const VOID_DREAD = Object.fromEntries(dread.map(([key, name, level, recall, description, kind = 'Spell'], index) => {
+  const id = `dread-${key}`;
+  return [id, { id, name, level, recall, description, kind, domain: 'Dread', source: 'void15',
+    reference: `${witchPdf}#page=${4 + Math.floor(index / 9)}` }];
+}));
