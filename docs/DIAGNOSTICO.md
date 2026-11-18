@@ -115,3 +115,41 @@ Comparação de tokens com `===` (`server.js:114`), recursão sem limite em TUS 
 3. **A7–A10, M14, M15** — bugs de perícias e ferramentas de validação.
 4. Médios e baixos, junto com as fases 3 e 4.
 5. Lacunas de negócio (Fase 2) e redesenho (Fase 5).
+
+## 7. Andamento
+
+### Bloco (a) — segurança e perícias (spec `.kiro/specs/security-and-skills-hotfix/`)
+
+Resolvidos: C1 (arquivo saiu do git; **a chave ainda precisa ser revogada no Supabase**), A1–A10, M1, M14, M15. Validado no Chrome pelo dono do projeto.
+
+### Bloco (b) — ferramentas e limpeza
+
+| Item | Ação | Evidência |
+|---|---|---|
+| Lint | ESLint 10 + `eslint-plugin-react-hooks`; scripts `npm run lint` e `npm run check` | 0 erros |
+| `SystemGuide`, `Music`, `youtubeId` | Removidos de `CampaignModules.jsx` (61 linhas) | Nenhum uso em JSX; abas usam `SystemConsultations` e `AudioCenter` |
+| CSS órfão | 100 seletores e 64 regras removidos (24 classes) | Classes sem referência em `src/` e `index.html` |
+| `dndAbilityModifier(s)`, `dndSkillBonus`, `vampireDicePool`, `updateResource` | Removidos de `sheetCalculations.ts` | Nenhuma importação |
+| Imports sem uso | `React` padrão (runtime automático do JSX), `Modal`, `TokenMaker`, `readImage`, `vampireDicePool`; estados `threat`/`exposure`; variável `own` | ESLint `no-unused-vars` |
+| `scripts/startDevServer.js` | Removido | Nenhum script usa; `npm run dev` usa `scripts/dev.js` |
+| `concurrently` | Dependência removida | Nenhum uso |
+| `fileIdentity` | Substituído por `identify` | Era só um alias |
+| Teste "Critical files remain original v1.4 bytes" | Removido | Impunha a preservação revogada |
+| Carregamento | `CampaignModules` e o editor de fichas carregados sob demanda | Ver métricas |
+
+**Métricas (build de produção):**
+
+| Medida | Antes | Depois |
+|---|---|---|
+| JS da tela inicial | 475,3 KB (149,5 KB gzip) | 342,2 KB (109,6 KB gzip) |
+| CSS da tela inicial | 75,0 KB (16,2 KB gzip) | 53,2 KB (12,2 KB gzip) |
+| CSS total | 75,0 KB | 70,3 KB |
+| Tempo de build | 39,8 s | ~30 s |
+| Testes | 28/31 passando | 59/59 passando |
+| Problemas de lint | sem lint | 0 erros, 18 avisos |
+
+**Pendências registradas:**
+- 18 avisos de `react-hooks` (estado copiado de props dentro de efeitos e dependências faltando). Correção junto com a refatoração dos componentes nas fases seguintes, com teste de interface.
+- `npm audit`: 4 altas em `picomatch` ≤ 4.0.7 (GHSA-fc5q-39xc-vjpf), puxado por `vite`. Não há versão corrigida publicada. Só roda no build, com padrões de arquivo do próprio projeto; não chega ao navegador nem ao servidor. Reavaliar quando sair `picomatch` 4.0.8.
+- `:root` definido duas vezes no CSS e cores fixas espalhadas: resolvido no redesenho (bloco g), com tokens únicos.
+- Documentos antigos (`LEIA-PRIMEIRO-V14-PRESERVADA.md`, `REGRAS-E-ATUALIZACAO-v1.5.0.md`, `MANIFESTO-PRESERVACAO.json`, `README-1.4v.md`, `CHANGELOG-1.4v.md`): aguardando decisão do dono.
