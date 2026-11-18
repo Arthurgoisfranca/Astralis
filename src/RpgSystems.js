@@ -1,9 +1,12 @@
+import { VAMPIRE_ALPHA2, VAMPIRE_V5_LEGACY, ALPHA_ATTRIBUTES } from "./domain/vampireAlpha2.mjs";
+export const systemLabel = system => system === VAMPIRE_V5_LEGACY ? "Vampire: The Masquerade 5E (V5)" : system;
 export const SYSTEMS = [
   "Ordem Paranormal 2",
   "D&D 5.5E (2024)",
   "D&D 5E",
   "Call of Cthulhu",
   "Vampire: The Masquerade 5E / 6E",
+  VAMPIRE_ALPHA2,
   "Daggerheart",
   "Triangle Agency",
   "Sacramento",
@@ -22,6 +25,15 @@ const dndFields = [
 ];
 
 const profiles = {
+  [VAMPIRE_ALPHA2]: {
+    fields: [...ALPHA_ATTRIBUTES,["clan","Clã"],["generationCategory","Categoria"],["health","Vitalidade"],["vitae","Vitae"],["willpower","Força de Vontade"],["humanity","Humanidade / Path"]],
+    shield: {source:"VAMPIRE · ALPHA 2.0 · FALL 2026",scope:"Player Packet e Storyteller Packet — regras provisórias, independentes da V5.",notice:"A aventura Not in My Domain! é material do Narrador; não publicar segredos como handouts.",sections:[
+      {title:"Testes e sucessos (Player Packet pp. 93–98)",items:[["Parada","Atributo + Skill; teste de poder: Atributo + Disciplina. Autocontrole: Composure + Resolve."],["d10","6–9 valem 1 sucesso; cada 10 vale 2. Compare com a Dificuldade; margem = sucessos − dificuldade."],["Fome","Substitui dados comuns um a um, até o tamanho da parada. Não há crítico bagunçado automático da V5."],["Falhas","Zero sucessos: falha dolorosa com complicação. Falha com 1 em dado de Fome: falha bestial; ambas podem coexistir."],["Metade e Pacto","Fora de estresse, metade da parada arredondada para cima. Pacto com a Besta: vitória básica negociada após falha, exceto falha dolorosa."]]},
+      {title:"Recursos (Player Packet pp. 56, 101–104)",items:[["Vitalidade","Vigor + 5; dano baneful reduz o máximo disponível até ser curado."],["Vitae","5 + 5 × modificador de geração; neonates/duskborn 10, ancillae 15, elders 20. Fome aumenta em cada quinto consumido."],["Vontade","Composure + Resolve; gastar 1 permite rerrolar até 3 dados comuns, nunca Fome."]]},
+      {title:"Masquerade Tracker (Storyteller Packet, cap. 3)",items:[["0–10","Registre nas anotações privadas da campanha; cada caixa é um rank, alterado pelo Narrador."],["0–4","0 superstição; 1–2 descrença; 3–4 ceticismo."],["5–10","5–6 preocupação; 7–8 certeza; 9–10 guerra aberta. Use os gatilhos e consequências do capítulo 3."]]},
+      {title:"Not in My Domain! (cenário, pp. 3–6)",items:[["Preparação","Três cenas, cerca de 3–4 horas; quatro neonates como referência. Tracker começa em 4."],["Recursos iniciais","Vitalidade e Vontade cheias, Vitae máximo −1. Variante difícil: neonates com 7 Vitae e 2 Fome."],["Referências","Use o Scenario Packet para os encontros, NPCs e gatilhos de caçadores; mantenha os detalhes no arquivo privado do Mestre."]]}
+    ]}
+  },
   "Ordem Paranormal 2": {
     fields: [["physical", "Físico"], ["mind", "Mente"], ["emotion", "Emoção"], ["pv", "Pontos de Vida"], ["pd", "Pontos de Determinação (PD)"], ["role", "Origem / papel"], ["nivel", "Nível de Agente"], ["pericias", "Perícias e dados de treino"], ["relacoes", "Relações"], ["marcas", "Marcas de nível"], ["inventory", "Inventário e carga"], ["conditions", "Condições"]],
     shield: {
@@ -138,7 +150,7 @@ const profiles = {
     shield: {
       source: "MANUAL BÁSICO · V5",
       scope: "Escudo de Narrador baseado no manual V5 enviado.",
-      notice: "O material recebido é da V5. Regras de outra edição ou variante da mesa ficam nas anotações privadas.",
+      notice: "V5: identificador legado preservado para campanhas existentes. A Alpha 2.0 é outro sistema.",
       sections: [
         { title: "Parada e Fome", items: [
           ["Parada", "Monte a parada pela ação e separe dados comuns dos dados de Fome."],

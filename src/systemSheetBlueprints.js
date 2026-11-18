@@ -1,3 +1,4 @@
+import { VAMPIRE_ALPHA2, ALPHA_ATTRIBUTES, ALPHA_SKILLS, ALPHA_CLANS, ALPHA_GENERATIONS, alphaResources } from "./domain/vampireAlpha2.mjs";
 const f=(key,label,kind="text",extra={})=>({key,label,kind,...extra});
 const s=(tab,title,fields)=>({tab,title,fields});
 const mat=(key,label,rows,mode,extra={})=>f(key,label,"matrix",{rows,mode,...extra});
@@ -19,6 +20,14 @@ const dndSections=edition=>[
   s("Detalhes","Idiomas e proficiências",[f("languagesProficiencies","Proficiências, idiomas e equipamento treinado","textarea",{rows:4})])
 ];
 export const SYSTEM_SHEETS={
+ [VAMPIRE_ALPHA2]:{skin:"vampire",notice:"Playtest público Alpha 2.0 · Fall 2026 · regras não finais. Ficha e rolagens próprias, sem misturar V5.",sections:[
+  s("Resumo","Identidade e trajetória",[f("clan","Clã (8 disponíveis no playtest)","select",{options:["",...ALPHA_CLANS]}),f("generationCategory","Categoria de geração","select",{options:ALPHA_GENERATIONS}),f("generation","Geração"),f("archetype","Arquétipo"),f("sire","Senhor/a"),f("coterie","Coterie"),f("lifepaths","Lifepaths","textarea",{rows:4}),f("clanTraits","Traços do clã","textarea",{rows:3})]),
+  s("Atributos","Nove atributos",ALPHA_ATTRIBUTES.map(([k,l])=>f(k,l,"number",{min:1,max:5}))),
+  s("Perícias","13 Skills do Alpha 2.0",mat("alphaSkills","Skills · termos do playtest",ALPHA_SKILLS,"rating",{max:5})),
+  s("Perícias","Especialidades",[f("specialties","Especialidades (Skill / foco)","textarea",{rows:4})]),
+  s("Recursos","Vitalidade, Vitae e Vontade",[f("health","Vitalidade atual","alphaTrack"),f("banefulDamage","Dano baneful · caixas indisponíveis","number",{min:0,max:10}),f("vitae","Vitae atual","alphaTrack"),f("willpower","Vontade atual","alphaTrack"),f("humanity","Humanidade / rank do Path","meter",{max:10}),f("path","Path of Enlightenment (se aprovado pelo Narrador)"),f("precepts","Preceitos e violações","textarea",{rows:4})]),
+  s("Detalhes","Disciplinas e recursos",[f("disciplines","Disciplinas · nível","rows",{columns:["Disciplina","Nível"]}),f("powers","Poderes · custo e efeito","rows",{columns:["Poder","Custo em Vitae / Vontade","Referência e efeito"]}),f("merits","Méritos e falhas","textarea",{rows:4}),f("resources","Recursos sociais e materiais","textarea",{rows:4}),f("inventory","Equipamento","textarea",{rows:4}),f("weapons","Armas · dano fixo e alcance","rows",{columns:["Arma","Dano base","Alcance","Observações"]})])
+ ]},
  "D&D 5.5E (2024)":{skin:"dnd",notice:"Ficha 2024 · recursos e termos seguem a edição escolhida pela mesa.",sections:dndSections("2024")},
  "D&D 5E":{skin:"dnd",notice:"Campos para D&D 5e. Confirme quais regras da edição 2014 estão em uso.",sections:dndSections("2014")},
  "Call of Cthulhu":{skin:"cthulhu",notice:"Call of Cthulhu 7ª edição · investigador dos anos 1920.",sections:[
@@ -27,7 +36,7 @@ export const SYSTEM_SHEETS={
   s("Perícias","Matriz de perícias · porcentagem",mat("skills","Perícias (%)",cocSkills,"percent",{baseValues:true})),
   s("Detalhes","Histórico do investigador",[f("personalDescription","Descrição pessoal","textarea",{rows:3}),f("beliefs","Ideologia e crenças","textarea",{rows:2}),f("importantPeople","Pessoas importantes","textarea",{rows:2}),f("significantPlaces","Locais significativos","textarea",{rows:2}),f("treasuredPossessions","Bens valiosos","textarea",{rows:2}),f("traits","Traços de personalidade","textarea",{rows:2}),f("phobias","Fobias e manias","textarea",{rows:2}),f("injuries","Cicatrizes e ferimentos","textarea",{rows:2}),f("connections","Conexões","textarea",{rows:3}),f("inventory","Equipamentos e inventário","textarea",{rows:4}),f("weapons","Armas · alcance · ataques · dano · defeito","rows",{columns:["Arma","Alcance","Ataques","Dano","Defeito"]})])
  ]},
- "Vampire: The Masquerade 5E / 6E":{skin:"vampire",notice:"Campos e rolagens conferidos para V5. O material enviado não documenta a 6ª edição.",sections:[
+ "Vampire: The Masquerade 5E / 6E":{skin:"vampire",notice:"Campos e rolagens V5; campanhas legadas permanecem nesta edição.",sections:[
   s("Resumo","Identidade da crônica",[f("clan","Clã"),f("generation","Geração"),f("predatorType","Tipo de predador"),f("sire","Senhor/a"),f("coterie","Coterie")]),
   s("Atributos","Atributos físicos",[["strength","Força"],["dexterity","Destreza"],["stamina","Vigor"]].map(([k,l])=>f(k,l,"meter",{max:5})).concat([])),
   s("Atributos","Atributos sociais e mentais",[["charisma","Carisma"],["manipulation","Manipulação"],["composure","Autocontrole"],["intelligence","Inteligência"],["wits","Raciocínio"],["resolve","Determinação"]].map(([k,l])=>f(k,l,"meter",{max:5})).concat([])),
@@ -80,6 +89,7 @@ export const SYSTEM_SHEETS={
 };
 export function sheetDefaults(system,current={}) {
  const stats={...current};
+ if(system===VAMPIRE_ALPHA2){for(const [key] of ALPHA_ATTRIBUTES)if(stats[key]===undefined)stats[key]="1";if(stats.generationCategory===undefined)stats.generationCategory="Neonate";if(stats.humanity===undefined)stats.humanity="6";const r=alphaResources(stats);for(const key of ["health","vitae","willpower"])if(stats[key]===undefined)stats[key]=String(r[key]);}
  if(system.startsWith("D&D")){for(const [key] of abil)if(stats[key]===undefined)stats[key]="10";if(stats.proficiencyBonus===undefined)stats.proficiencyBonus="2";if(stats.level===undefined)stats.level="1";if(stats.speed===undefined)stats.speed="30";}
  
  return stats;

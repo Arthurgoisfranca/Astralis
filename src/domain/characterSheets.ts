@@ -4,6 +4,7 @@ export const SYSTEM_IDS = [
   "D&D 5E",
   "Call of Cthulhu",
   "Vampire: The Masquerade 5E / 6E",
+  "Vampire: The Masquerade 6E (Alpha 2.0)",
   "Daggerheart",
   "Triangle Agency",
   "Sacramento",
@@ -82,6 +83,23 @@ export interface VampireV5Sheet extends SheetIdentity {
   readonly willpower: ResourceTrack;
 }
 
+export interface VampireAlpha2Sheet extends SheetIdentity {
+ readonly system: "Vampire: The Masquerade 6E (Alpha 2.0)";
+ readonly attributes: Readonly<Record<"strength"|"dexterity"|"stamina"|"charisma"|"manipulation"|"composure"|"intelligence"|"wits"|"resolve",number>>;
+ readonly skills: Readonly<Record<string,number>>;
+ readonly generationCategory: "Duskborn"|"Neonate"|"Ancilla"|"Elder";
+ readonly generationModifier: number;
+ readonly clan: string;
+ readonly generation: string;
+ readonly humanity: number;
+ readonly path: string;
+ readonly health: ResourceTrack;
+ readonly banefulDamage: number;
+ readonly vitae: ResourceTrack;
+ readonly willpower: ResourceTrack;
+ readonly hunger: number;
+ readonly details: Readonly<Record<string,string>>;
+}
 export type QualityAssurance = "attentiveness" | "duplicity" | "dynamism" | "empathy" | "initiative" | "persistence" | "presence" | "professionalism" | "subtlety";
 export interface TriangleAgencySheet extends SheetIdentity {
   readonly system: "Triangle Agency";
@@ -175,6 +193,7 @@ export type CharacterSheet =
   | DaggerheartSheet
   | CallOfCthulhuSheet
   | VampireV5Sheet
+  | VampireAlpha2Sheet
   | TriangleAgencySheet
   | DndSheet
   | SacramentoSheet
@@ -201,6 +220,8 @@ export function createBlankSheet(system: SystemId, characterId: string, playerId
       return { ...base, system, attributes: { agility: 0, strength: 0, finesse: 0, instinct: 0, presence: 0, knowledge: 0 }, evasion: 0, damageThresholds: { minor: 0, major: 0, severe: 0 }, resources: { hitPoints: track(), stress: track(), hope: track(), armor: track() }, domains: [], subclasses: [], className: "", level: 1, inventory: [] };
     case "Call of Cthulhu":
       return { ...base, system, edition: "7e-1920", characteristics: { str: 0, dex: 0, con: 0, app: 0, edu: 0, siz: 0, int: 0, pow: 0 }, derived: { sanity: 0, luck: 0, magicPoints: 0, hitPoints: 0, movement: 0 }, skills: {}, history: "", phobiasAndManias: [], occupation: "", injuries: "" };
+    case "Vampire: The Masquerade 6E (Alpha 2.0)":
+      return { ...base, system, attributes:{strength:1,dexterity:1,stamina:1,charisma:1,manipulation:1,composure:1,intelligence:1,wits:1,resolve:1},skills:{},generationCategory:"Neonate",generationModifier:1,clan:"",generation:"",humanity:6,path:"",health:track(6),banefulDamage:0,vitae:track(10),willpower:track(2),hunger:0,details:{} };
     case "Vampire: The Masquerade 5E / 6E":
       return { ...base, system, attributes: { physical: { strength: 1, dexterity: 1, stamina: 1 }, social: { charisma: 1, manipulation: 1, composure: 1 }, mental: { intelligence: 1, wits: 1, resolve: 1 } }, skills: {}, disciplines: [], hunger: 0, humanity: 7, bloodPotency: 0, convictions: [], health: track(), willpower: track() };
     case "Triangle Agency":
@@ -272,6 +293,20 @@ export function buildCharacterSheet(system: SystemId, characterId: string, playe
     case "Call of Cthulhu": {
       const sheet = base as CallOfCthulhuSheet;
       return { ...sheet, ...identityFields, characteristics: { str: statNumber(input, "str"), dex: statNumber(input, "dex"), con: statNumber(input, "con"), app: statNumber(input, "app"), edu: statNumber(input, "edu"), siz: statNumber(input, "siz"), int: statNumber(input, "int"), pow: statNumber(input, "pow") }, derived: { sanity: statNumber(input, "san"), luck: statNumber(input, "luck"), magicPoints: statNumber(input, "magicPoints"), hitPoints: statNumber(input, "hitPoints"), movement: statNumber(input, "movement") }, skills: numericEntries(input, "skills"), history: statText(input, "history"), phobiasAndManias: Object.freeze(statList(input, "phobias")), occupation: statText(input, "occupation"), injuries: statText(input, "injuries") };
+    }
+    case "Vampire: The Masquerade 6E (Alpha 2.0)": {
+      const sheet=base as VampireAlpha2Sheet;
+      const bounded=(key:string,min:number,max:number,fallback:number)=>{const raw=statText(input,key);const n=Number(raw.split("/")[0]);return raw!==""&&Number.isFinite(n)?Math.max(min,Math.min(max,Math.trunc(n))):fallback;};
+      const attributes={...sheet.attributes};
+      for(const key of Object.keys(attributes) as (keyof typeof attributes)[])attributes[key]=bounded(key,1,5,1);
+      const raw=statText(input,"generationCategory");
+      const generationCategory:VampireAlpha2Sheet["generationCategory"]=raw==="Duskborn"||raw==="Ancilla"||raw==="Elder"?raw:"Neonate";
+      const generationModifier=generationCategory==="Elder"?3:generationCategory==="Ancilla"?2:1;
+      const healthMax=attributes.stamina+5,willpowerMax=attributes.composure+attributes.resolve,vitaeMax=5+5*generationModifier;
+      const banefulDamage=bounded("banefulDamage",0,healthMax,0);
+      const vitae=bounded("vitae",0,vitaeMax,vitaeMax);
+      const details=Object.fromEntries(["archetype","sire","coterie","lifepaths","clanTraits","specialties","precepts","disciplines","powers","merits","resources","inventory","weapons"].map(k=>[k,statText(input,k)]));
+      return {...sheet,...identityFields,attributes,skills:numericEntries(input,"alphaSkills"),generationCategory,generationModifier,clan:statText(input,"clan"),generation:statText(input,"generation"),humanity:bounded("humanity",0,10,6),path:statText(input,"path"),health:{current:bounded("health",0,healthMax-banefulDamage,healthMax-banefulDamage),max:healthMax},banefulDamage,vitae:{current:vitae,max:vitaeMax},willpower:{current:bounded("willpower",0,willpowerMax,willpowerMax),max:willpowerMax},hunger:Math.ceil((vitaeMax-vitae)/(vitaeMax/5)),details};
     }
     case "Vampire: The Masquerade 5E / 6E": {
       const sheet = base as VampireV5Sheet;

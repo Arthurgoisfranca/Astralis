@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {alphaResources,alphaResult,vampireAlpha2,alphaTakingHalf,alphaReroll,VAMPIRE_ALPHA2,ALPHA_SKILLS} from "../src/domain/vampireAlpha2.mjs";
+import {vampireV5} from "../src/domain/diceEngines.mjs";
+import {SYSTEMS,systemProfile,systemLabel} from "../src/RpgSystems.js";
+import {SYSTEM_SHEETS} from "../src/systemSheetBlueprints.js";
+test("V5 preservada e Alpha 2.0 separado",()=>{assert.ok(SYSTEMS.includes(VAMPIRE_ALPHA2));assert.equal(systemLabel("Vampire: The Masquerade 5E / 6E"),"Vampire: The Masquerade 5E (V5)");assert.equal(vampireV5({pool:1,difficulty:1},()=>.99).total,1);assert.equal(alphaResult([10],0,2).total,2);assert.equal(ALPHA_SKILLS.length,13);assert.ok(SYSTEM_SHEETS[VAMPIRE_ALPHA2]);assert.match(systemProfile(VAMPIRE_ALPHA2).shield.source,/ALPHA 2.0/);});
+test("Vitae, máximos e limites de Fome de todas as categorias",()=>{for(const [category,max] of [["Neonate",10],["Duskborn",10],["Ancilla",15],["Elder",20]]){for(let v=0;v<=max;v++){const r=alphaResources({generationCategory:category,stamina:3,composure:2,resolve:3,vitae:v,banefulDamage:2,health:99});assert.equal(r.vitaeMax,max);assert.equal(r.hunger,Math.ceil((max-v)/(max/5)));assert.equal(r.health,6);assert.equal(r.willpowerMax,5);}}});
+test("Falha dolorosa e bestial coexistem; 1 de Fome em sucesso não é falha",()=>{let r=alphaResult([2,1],1,2);assert.ok(r.painful&&r.bestial);assert.equal(r.bargainEligible,false);r=alphaResult([10,1],1,2);assert.ok(r.good&&!r.bestial);assert.equal(alphaResult([6,1],1,2).bargainEligible,true);});
+test("Fome substitui dados; metade e rerrolagem",()=>{const r=vampireAlpha2({pool:2,hunger:5,difficulty:3},()=>.99);assert.equal(r.hungerCount,2);assert.equal(r.total,4);assert.equal(alphaTakingHalf(5,3).total,3);assert.throws(()=>alphaReroll(r,[0]));const base=alphaResult([2,3,1],1,2);assert.equal(alphaReroll(base,[0,1],()=>.99).total,4);assert.throws(()=>alphaReroll(base,[2]));assert.throws(()=>vampireAlpha2({pool:0}));});
