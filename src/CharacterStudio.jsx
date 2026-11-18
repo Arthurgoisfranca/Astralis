@@ -6,6 +6,8 @@ import {callOfCthulhuThresholds,daggerheartDamage,isWithinDamageThresholds,vampi
 import {SYSTEM_SHEETS,sheetDefaults} from "./systemSheetBlueprints.js";
 import {cairnSave,cairnSlots,cairnDamage,CAIRN_SCARS,rollExpression,ordemWithPavor} from "./domain/manualRules.mjs";
 import {VAMPIRE_ALPHA2,VAMPIRE_V5_LEGACY,ALPHA_ATTRIBUTES,ALPHA_SKILLS,alphaResources,vampireAlpha2,alphaTakingHalf,alphaReroll} from "./domain/vampireAlpha2.mjs";
+import OrdemParanormalStudio from "./OrdemParanormalStudio.jsx";
+import {prepareOP2Stats} from "./domain/ordemPlaytestStudio.mjs";
 import "./characterStudio.css";
 
 const DICE=["d4","d6","d8","d10","d12","d20"];
@@ -170,11 +172,53 @@ class SheetErrorBoundary extends React.Component {
 }
 export function CharacterStudio(props){return <SheetErrorBoundary onClose={props.onClose}><CharacterStudioContent {...props}/></SheetErrorBoundary>}
 function CharacterStudioContent({player,profile,system,upload,send,onClose,onSave}){
- const old=player.character||{},[form,setForm]=useState({...old,name:old.name||"",classLevel:old.classLevel||"",stats:sheetDefaults(system,old.stats||{}),appearance:old.appearance||"",inventory:old.inventory||"",notes:old.notes||"",token:old.token||"",pdf:old.pdf||null}),[tab,setTab]=useState("Resumo"),[tokenOpen,setTokenOpen]=useState(false),[saving,setSaving]=useState(false);
+ const old=player.character||{},[form,setForm]=useState({...old,name:old.name||(system==="Ordem Paranormal 2"?"Novo Agente":""),classLevel:old.classLevel||"",stats:sheetDefaults(system,old.stats||{}),appearance:old.appearance||"",inventory:old.inventory||"",notes:old.notes||"",token:old.token||"",pdf:old.pdf||null}),[tab,setTab]=useState("Resumo"),[tokenOpen,setTokenOpen]=useState(false),[saving,setSaving]=useState(false);
  const blueprint=SYSTEM_SHEETS[system]||SYSTEM_SHEETS["Assimilação RPG"],stats=form.stats,tabs=["Resumo","Atributos","Recursos","Perícias","Detalhes","Rolagens"],parts=(Array.isArray(blueprint?.sections)?blueprint.sections:[]).filter(item=>item?.tab===tab);
  function setStat(key,value){setForm(old=>({...old,stats:{...old.stats,[key]:value}}));}
- async function save(event){event.preventDefault();if(system==="Cairn 2e" && cairnSlots(form.stats.inventory,form.stats.fatigue).overLimit){alert("O inventário Cairn excede os dez espaços. Revise itens volumosos e Fadiga.");return;}setSaving(true);try{const next={...form,stats:{...stats}};if(next.token?.startsWith("data:image/")&&upload){const response=await fetch(next.token),blob=await response.blob(),saved=await upload(new File([blob],"token-"+makeId()+".png",{type:blob.type||"image/png"}),{scope:"public",kind:"character"});next.token=saved.url;}next.hp=String(system==="Call of Cthulhu"?(stats.hitPoints??""):system==="Ordem Paranormal 2"?(stats.pv??""):(stats.hp??form.hp??""));next.ac=String(stats.ac??form.ac??"");next.inventory=String(stats.inventory??form.inventory??"");const builderStats={...next.stats};if(system===VAMPIRE_V5_LEGACY)builderStats.skills=[builderStats.skillsPhysical||"",builderStats.skillsSocialMental||""].join("\n");next.sheet=buildCharacterSheet(system,player.id,player.id,{name:form.name,classLevel:String(stats.className||form.classLevel||""),portraitUrl:next.token||null,notes:form.notes,appearance:form.appearance,inventory:next.inventory,stats:builderStats});await onSave(next);}catch(error){alert(error.message||"Não foi possível salvar a ficha.");}finally{setSaving(false);}}
+ async function save(event) {
+  event.preventDefault();
+  if (system === "Cairn 2e" && cairnSlots(form.stats.inventory, form.stats.fatigue).overLimit) {
+   alert("O inventário Cairn excede os dez espaços. Revise itens volumosos e Fadiga.");
+   return;
+  }
+  setSaving(true);
+  try {
+   const isOp2 = system === "Ordem Paranormal 2";
+   const next = { ...form, stats: isOp2 ? prepareOP2Stats(stats) : { ...stats } };
+   if (next.token?.startsWith("data:image/") && upload) {
+    const response = await fetch(next.token);
+    const blob = await response.blob();
+    const saved = await upload(new File([blob], "token-" + makeId() + ".png", { type: blob.type || "image/png" }), { scope: "public", kind: "character" });
+    next.token = saved.url;
+   }
+   next.hp = String(system === "Call of Cthulhu" ? (stats.hitPoints ?? "") : isOp2 ? (stats.pv ?? "") : (stats.hp ?? form.hp ?? ""));
+   next.ac = String(stats.ac ?? form.ac ?? "");
+   next.inventory = String(stats.inventory ?? form.inventory ?? "");
+   const builderStats = { ...next.stats };
+   if (isOp2) builderStats.classe = String(stats.archetype || "");
+   if (system === VAMPIRE_V5_LEGACY) builderStats.skills = [builderStats.skillsPhysical || "", builderStats.skillsSocialMental || ""].join("\n");
+   next.sheet = buildCharacterSheet(system, player.id, player.id, {
+    name: form.name,
+    classLevel: String(stats.className || form.classLevel || ""),
+    portraitUrl: next.token || null,
+    notes: form.notes,
+    appearance: form.appearance,
+    inventory: next.inventory,
+    stats: builderStats,
+   });
+   await onSave(next);
+   if (isOp2) {
+    try { localStorage.removeItem(`astralis:op2:draft:${String(player.id ?? "local").slice(0, 72)}`); }
+    catch { /* armazenamento local indisponível */ }
+   }
+  } catch (error) {
+   alert(error.message || "Não foi possível salvar a ficha.");
+  } finally {
+   setSaving(false);
+  }
+ }
  return <Modal title={"Ficha de "+player.name} onClose={onClose}><form className="sheet-studio" data-skin={blueprint.skin} onSubmit={save}>
+  {system==="Ordem Paranormal 2"?<OrdemParanormalStudio player={player} form={form} setForm={setForm} stats={stats} setStat={setStat} onTokenOpen={()=>setTokenOpen(true)}/>:<>
   <div className="studio-identity"><div className="studio-portrait">{form.token?<img src={form.token} alt="Retrato"/>:<span>{(form.name||player.name||"?").slice(0,1).toUpperCase()}</span>}<button type="button" onClick={()=>setTokenOpen(true)}>Retrato</button></div><div className="studio-title-fields"><span className="studio-system">{system}</span><input className="character-name-input" required placeholder="Nome do personagem" value={form.name} onChange={e=>setForm(old=>({...old,name:e.target.value}))}/><input className="character-class-input" placeholder="Classe, nível ou conceito" value={form.classLevel} onChange={e=>setForm(old=>({...old,classLevel:e.target.value}))}/><p>{blueprint.notice}</p></div>{form.pdf&&<span className="studio-pdf">PDF · {form.pdf.name}</span>}</div>
   <nav className="studio-tabs" aria-label="Seções da ficha">{tabs.map(item=><button type="button" key={item} className={tab===item?"selected":""} onClick={()=>setTab(item)}>{item}</button>)}</nav>
   {tab==="Rolagens"?(system===VAMPIRE_ALPHA2?<VampireAlpha2Roller stats={stats} onStatChange={setStat}/>:<SkillCheck system={system} stats={stats} send={send} playerName={form.name||player.name} onStatChange={setStat}/>):<div className="studio-sheet-body">{parts.map((part,index)=><section className="studio-section" key={part.title+"-"+index}><header><span>{part.tab}</span><h3>{part.title}</h3></header><div className="studio-fields">{(Array.isArray(part?.fields)?part.fields:[]).filter(field=>field&&typeof field.key==="string").map(field=><SheetField key={field.key} field={field} stats={stats} value={field.key==="appearance"?form.appearance:field.key==="notes"?form.notes:stats[field.key]} onChange={value=>field.key==="appearance"?setForm(old=>({...old,appearance:value})):field.key==="notes"?setForm(old=>({...old,notes:value})):setStat(field.key,value)}/>)}</div></section>)}{system==="Cairn 2e"&&tab==="Recursos"&&<CairnInventory stats={stats} onStatChange={setStat}/>}
@@ -182,6 +226,7 @@ function CharacterStudioContent({player,profile,system,upload,send,onClose,onSav
   {tab==="Detalhes"&&system===VAMPIRE_ALPHA2&&<p className="muted-copy">Armas Alpha 2.0: o dano base registrado é somado à margem de sucesso do ataque, conforme o Player Packet (conflito físico). Use Fighting ou Shooting no rolador; o Narrador resolve defesa, mitigação e efeitos.</p>}
   {tab==="Recursos"&&system===VAMPIRE_ALPHA2&&<p className="muted-copy">Fome calculada pela Vitae: {alphaResources(stats).hunger}/5. Máximos: Vigor + 5, Composure + Resolve e 5 + 5 × modificador de geração.</p>}
   {system.startsWith("D&D")&&tab==="Atributos"&&<section className="studio-section modifier-section"><header><span>DERIVADOS</span><h3>Modificadores de atributo</h3></header><div className="modifier-grid">{DND_ABILITIES.map(([key,label])=>{const mod=Math.floor(((Number(stats[key])||10)-10)/2);return <span key={key}><small>{label}</small><b>{signed(mod)}</b></span>;})}</div></section>}{system==="Daggerheart"&&tab==="Recursos"&&(()=>{const values={minor:Number(stats.minor)||0,major:Number(stats.major)||0,severe:Number(stats.severe)||0},damage=Number(stats.damage)||0;if(!damage)return null;const result=daggerheartDamage(damage,values);return <section className="studio-section damage-section"><header><span>RESOLUÇÃO</span><h3>Dano desta cena</h3></header><p>{isWithinDamageThresholds(values)?"Dano "+result.severity+(result.overflow?" · excede o limiar grave em "+result.overflow:""):"Revise a ordem dos limiares: menor ≤ maior ≤ grave."}</p></section>;})()}{tab==="Resumo"&&<section className="studio-section"><header><span>REGISTRO</span><h3>Aparência e notas</h3></header><div className="studio-fields"><label className="studio-field studio-field-wide">Aparência<textarea rows="3" value={form.appearance} onChange={e=>setForm(old=>({...old,appearance:e.target.value}))}/></label><label className="studio-field studio-field-wide">Notas do personagem<textarea rows="3" value={form.notes} onChange={e=>setForm(old=>({...old,notes:e.target.value}))}/></label></div></section>}</div>}
+  </>}
   <footer className="studio-footer"><span>{profile?.source||"Ficha digital"} · sincronizada na mesa</span><div><button type="button" className="studio-cancel" onClick={onClose}>Fechar</button><button className="studio-save" disabled={saving}>{saving?"Salvando…":"Salvar ficha"}</button></div></footer>
   {tokenOpen&&<TokenMaker initial={form.token} onClose={()=>setTokenOpen(false)} onSave={token=>{setForm(old=>({...old,token}));setTokenOpen(false);}}/>}
  </form></Modal>;
