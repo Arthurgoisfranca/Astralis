@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ABILITIES, ABILITY_KEYS, ARMOR, SKILLS, SKILL_KEYS, SPELLS } from './domain/dnd2024Catalog.mjs';
-import { armorClass, bounded, changeHP, classData, featureLevels, levelRow, recover, resourceCaps,
-  rollDamage, rollDndTest, signedNumber, skillBonus, usesLeft, weaponStats } from './domain/dnd2024Rules.mjs';
+import { ABILITIES, ABILITY_KEYS, ARMOR, SKILLS, SKILL_KEYS, SPELLS, spellLabel } from './domain/dnd2024Catalog.mjs';
+import { activeSubclass, armorClass, bounded, changeHP, classData, featureLevels, levelRow, metamagicCapacity, recover, resourceCaps,
+  rollDamage, rollDndTest, signedNumber, skillBonus, subclassLabel, usesLeft, weaponStats } from './domain/dnd2024Rules.mjs';
 import { die } from './domain/manualRules.mjs';
 import { Select, TextField } from './Dnd2024Builder.jsx';
 
@@ -11,8 +11,10 @@ const CONDITIONS = ['Agarrado', 'Amedrontado', 'Atordoado', 'Caído', 'Cego', 'C
 const SPELL_ROLLS = {
   'Sacred Flame': ['save', '1d8', 'Destreza'], 'Guiding Bolt': ['attack', '4d6'], 'Fire Bolt': ['attack', '1d10'],
   'Ray of Frost': ['attack', '1d8'], 'Eldritch Blast': ['attack', '1d10'],
+  'Acid Splash': ['save', '1d6', 'Destreza'], Fireball: ['save', '8d6', 'Destreza'],
+  'Burning Hands': ['save', '3d6', 'Destreza'], Shatter: ['save', '3d8', 'Constituição'],
   'Cure Wounds': ['heal', '2d8'], 'Healing Word': ['heal', '2d4'],
-  Bane: ['save', '', 'Carisma'], 'Toll the Dead': ['save', '', 'Sabedoria'],
+  Bane: ['save', '', 'Carisma'], 'Badalar Fúnebre': ['save', '', 'Sabedoria'],
 };
 
 function Counter({ title, current, max, onChange }) {
@@ -131,7 +133,7 @@ function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
   const slots = [...regular, ...pact];
   function cast(spell, slot, level) {
     if (slot) spend(slot.id, slot.max, usesLeft(play, slot.id, slot.max) - 1);
-    log({ label: spell.name, status: 'Conjuração', detail: level ? `Círculo ${level}` : 'Truque' });
+    log({ label: spellLabel(spell.name), status: 'Conjuração', detail: level ? `Círculo ${level}` : 'Truque' });
   }
   return <>
     <div className="dnd24-stage-header"><h3>Magias conhecidas e preparadas</h3><button type="button" onClick={onEdit}>Alterar seleção</button></div>
@@ -140,6 +142,7 @@ function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
     {!spells.length && <p>Nenhuma magia cadastrada para esta combinação.</p>}
     <div className="dnd24-spell-options">{spells.map((entry, index) => {
       const spell = SPELLS[entry.name], level = spell?.level ?? 0, mod = details.modifiers[entry.ability] ?? 0;
+      const label = spellLabel(entry.name);
       const [kind, formula, savingAbility] = SPELL_ROLLS[entry.name] ?? [];
       const slot = slots.find(item => item.level >= level && usesLeft(play, item.id, item.max) > 0);
       const arcanum = entry.id.includes(':arcanum');
@@ -151,20 +154,21 @@ function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
       const cantripDice = details.level >= 17 ? 4 : details.level >= 11 ? 3 : details.level >= 5 ? 2 : 1;
       const beams = entry.name === 'Eldritch Blast' ? cantripDice : 0;
       const rollDice = formula && (level || beams ? formula : formula.replace(/^1/, String(cantripDice)));
+      const potent = level === 0 && ['cleric', 'cleric:cantrips', 'cleric:order'].includes(entry.id) && details.blessedStrike === 'Conjuração Poderosa';
       return <details className="dnd24-subcard" key={index}>
-        <summary><b>{entry.name}</b> · {level ? `${level}º círculo` : 'Truque'}{spell?.concentration ? ' · Concentração' : ''}</summary>
+        <summary><b>{label}</b> · {level ? `${level}º círculo` : 'Truque'}{spell?.concentration ? ' · Concentração' : ''}{spell?.ritual ? ' · Ritual' : ''}</summary>
         <p>{entry.source} · {ABILITIES[entry.ability]?.[0] ?? 'Conjuração'} · CD {8 + details.pb + mod} · Ataque {signedNumber(details.pb + mod)}</p>
         {beams > 1 && <p>{beams} raios · role ataque e dano para cada raio.</p>}
         {spell?.components && <p>{spell.components.split('').join(' / ')} · {spell.range} · {spell.duration}</p>}
         <div className="dnd24-actions">
-          {kind === 'attack' && <button type="button" onClick={() => roll(entry.name, 'attack', details.pb + mod, { ability: entry.ability })}>Rolar ataque</button>}
+          {kind === 'attack' && <button type="button" onClick={() => roll(label, 'attack', details.pb + mod, { ability: entry.ability })}>Rolar ataque</button>}
           {kind === 'save' && <span>Salvaguarda de {savingAbility} · CD {8 + details.pb + mod}</span>}
-          {rollDice && <button type="button" onClick={() => damage(entry.name, rollDice, kind === 'heal' ? mod : 0,
-            kind === 'attack' && last?.label === entry.name && last.critical, kind === 'heal' ? 'heal' : 'damage')}>{kind === 'heal' ? 'Cura' : 'Dano'} base · {rollDice}</button>}
+          {rollDice && <button type="button" onClick={() => damage(label, rollDice, kind === 'heal' || potent ? mod : 0,
+            kind === 'attack' && last?.label === label && last.critical, kind === 'heal' ? 'heal' : 'damage')}>{kind === 'heal' ? 'Cura' : 'Dano'} base · {rollDice}</button>}
           {!arcanum && <button type="button" disabled={level > 0 && !slot} onClick={() => cast(entry, level ? slot : null, level ? slot.level : 0)}>
             {level ? 'Conjurar com espaço' : 'Conjurar truque'}</button>}
           {freeId && <button type="button" disabled={!usesLeft(play, freeId, freeMax)} onClick={() => {
-            spend(freeId, freeMax, usesLeft(play, freeId, freeMax) - 1); log({ label: entry.name, status: 'Conjuração livre', detail: `${level}º círculo` });
+            spend(freeId, freeMax, usesLeft(play, freeId, freeMax) - 1); log({ label, status: 'Conjuração livre', detail: `${level}º círculo` });
           }}>Usar conjuração livre</button>}
         </div>
       </details>;
@@ -211,7 +215,10 @@ function Traits({ build, details }) {
   return <>
     <h3>Traços e recursos de classe</h3>
     {build.classes.map(entry => <details key={entry.id} className="dnd24-subcard" open>
-      <summary>{classData(entry).name} {entry.level}{entry.subclass ? ` · ${entry.subclass}` : ''}</summary>
+      <summary>{classData(entry).name} {entry.level}{entry.subclass && entry.level >= 3 ? ` · ${subclassLabel(entry)}` : ''}</summary>
+      {activeSubclass(entry)?.terrains?.[entry.terrain] && <p>Terreno · {entry.terrain}</p>}
+      {!!metamagicCapacity(entry) && entry.metamagic?.length > 0 && <p>Metamagia · {entry.metamagic.slice(0, metamagicCapacity(entry)).join(' · ')}</p>}
+      {entry.id === 'cleric' && entry.level >= 7 && entry.blessedStrike && <p>Golpes Abençoados · {entry.blessedStrike}</p>}
       <ul className="dnd24-plain-list">{featureLevels(entry).filter(row => row.level <= entry.level && row.features.length).reverse()
         .map(row => <li key={row.level}><small>Nível {row.level}</small> {row.features.join(' · ')}</li>)}</ul>
     </details>)}
@@ -230,7 +237,7 @@ export default function Dnd2024Sheet({ build, details, play, onPlay, form, about
   const resources = resourceCaps(build, details);
   const classText = build.classes.map(entry => `${classData(entry).name} ${entry.level}`).join(' / ');
   function roll(label, kind, bonus, options = {}) {
-    const fighter = build.classes.find(entry => entry.subclass === 'Champion');
+    const fighter = build.classes.find(entry => activeSubclass(entry)?.id === 'Champion');
     const criticalAt = options.weapon && fighter?.level >= 3 ? fighter.level >= 15 ? 18 : 19 : 20;
     const armor = ARMOR[play.armor];
     const untrained = armor && !details.armorTraining.has(armor[1]) && ['strength', 'dexterity'].includes(options.ability);
