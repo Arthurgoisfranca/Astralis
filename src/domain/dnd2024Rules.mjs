@@ -1,4 +1,6 @@
-import { ABILITIES, ABILITY_KEYS, ARMOR, BACKGROUNDS, CLASSES, LANGUAGES, METAMAGIC, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, SPELLS, STYLES, TOOLS, WEAPONS } from './dnd2024Catalog.mjs';
+import { ABILITIES, ABILITY_KEYS, ARMOR, BACKGROUNDS, CLASSES, CRAFT_TOOLS, FEAT_OPTIONS, INSTRUMENTS, LANGUAGES,
+  METAMAGIC, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, SPELLS, STYLES, TOOLS, WEAPONS, featInfo } from './dnd2024Catalog.mjs';
+import { ELEMENTS, ENERGY } from './dnd2024Feats.mjs';
 import { dnd5 } from './diceEngines.mjs';
 import { die, rollExpression } from './manualRules.mjs';
 
@@ -31,7 +33,7 @@ export function emptyBuild() {
   return {
     version: 1, classes: [], species: '', lineage: '', speciesSkill: '', speciesAbility: '', humanFeat: '', background: '', custom: {},
     scoreMethod: 'standard', scores: {}, rolled: [], bonusMode: 'split', bonuses: [], feats: {},
-    magicAbilities: {}, backgroundTool: '', skilled: [], languages: [], classKit: '', backgroundKit: '', focus: '',
+    magicAbilities: {}, featChoices: {}, backgroundTool: '', backgroundKitTool: '', skilled: [], languages: [], classKit: '', backgroundKit: '', focus: '',
   };
 }
 
@@ -72,6 +74,11 @@ export function readBuild(value) {
     bonuses: Array.isArray(parsed.bonuses) ? parsed.bonuses.slice(0, 3).map(shortText) : [],
     feats: Object.fromEntries(Object.entries(objectOrEmpty(parsed.feats)).filter(([id]) => /^(\w+)-(\d{1,2})$/.test(id))
       .map(([id, row]) => [id, { name: shortText(row?.name), label: shortText(row?.label), values: pickList(row?.values, ABILITY_KEYS) }])),
+    featChoices: Object.fromEntries(Object.entries(objectOrEmpty(parsed.featChoices))
+      .filter(([id]) => /^(origin:(background|human)|\w+-\d{1,2})$/.test(id)).slice(0, 20).map(([id, row]) => [id, {
+        selected: pickList(row?.selected, [...SKILL_KEYS, ...TOOLS, ...ENERGY, ...Object.keys(WEAPONS)]).slice(0, 3),
+        ...(SKILL_KEYS.includes(row?.expertise) ? { expertise: row.expertise } : {}),
+      }])),
     magicAbilities: Object.fromEntries(Object.entries(objectOrEmpty(parsed.magicAbilities)).filter(([feat, key]) => ORIGIN_FEATS.includes(feat) && ABILITY_KEYS.includes(key))),
     skilled: pickList(parsed.skilled, [...SKILL_KEYS, ...TOOLS]),
     languages: pickList(parsed.languages, LANGUAGES).slice(0, 2),
@@ -100,6 +107,10 @@ export const fightingStyles = entry => [
 ];
 const hasStyle = (entry, style) => entry.style === style ||
   (entry.level >= 7 && activeSubclass(entry)?.id === 'Champion' && entry.extraStyle === style);
+export const classStyleSelections = entry => [
+  ...(entry.id === 'fighter' || ['paladin', 'ranger'].includes(entry.id) && entry.level >= 2 ? [entry.style] : []),
+  ...(entry.level >= 7 && activeSubclass(entry)?.id === 'Champion' ? [entry.extraStyle] : []),
+].filter(name => STYLES.includes(name));
 
 export function featureLevels(entry) {
   const data = classData(entry);
@@ -140,7 +151,7 @@ export function featSlots(build) {
     .flatMap(row => {
       const epic = row.features.includes('Epic Boon');
       return epic || row.features.includes('Ability Score Improvement')
-        ? [{ id: `${entry.id}-${row.level}`, name: classData(entry).name, level: row.level, epic }] : [];
+        ? [{ id: `${entry.id}-${row.level}`, classId: entry.id, name: classData(entry).name, level: row.level, epic }] : [];
     }));
 }
 
@@ -188,9 +199,8 @@ export function skillChoiceGroups(build, background = chosenBackground(build)) {
 
 const subclassSkills = build => build.classes.some(entry => activeSubclass(entry)?.id === 'Warrior of Mercy') ? ['Insight', 'Medicine'] : [];
 const featOrigins = build => unique([chosenBackground(build)?.feat, build.species === 'human' ? build.humanFeat : ''].filter(Boolean));
-const magicOrigin = feat => ({
-  'Magic Initiate (Cleric)': 'cleric', 'Magic Initiate (Druid)': 'druid', 'Magic Initiate (Wizard)': 'wizard',
-})[feat];
+const magicOrigin = feat => featInfo(feat)?.list;
+export const humanFeatOptions = backgroundFeat => ORIGIN_FEATS.filter(name => name !== backgroundFeat || featInfo(name).repeatable);
 export const isInnateCaster = build => ['elf', 'gnome', 'tiefling'].includes(build.species);
 const innateSpells = {
   Drow: ['Dancing Lights', 'Faerie Fire', 'Darkness'], 'Alto elfo': ['Prestidigitation', 'Detect Magic', 'Misty Step'],
@@ -218,6 +228,123 @@ function classMagic(entry) {
   return { caster, ability, list: entry.id, row: levelRow(entry) };
 }
 
+function expertOptions(entry, skills) {
+  const scholar = entry.id === 'wizard' && entry.level >= 2;
+  const count = entry.id === 'rogue' ? (entry.level >= 6 ? 4 : 2)
+    : entry.id === 'bard' && entry.level >= 2 ? (entry.level >= 9 ? 4 : 2)
+      : entry.id === 'ranger' && entry.level >= 2 || scholar ? 1 : 0;
+  const allowed = scholar ? skills.filter(skill => ['Arcana', 'History', 'Investigation', 'Medicine', 'Nature', 'Religion'].includes(skill)) : skills;
+  return { id: entry.id, title: scholar ? 'Acadêmico · Mago' : `Especialização · ${classData(entry).name}`,
+    count, allowed, values: pickList(entry.expertise, allowed).slice(0, count) };
+}
+
+function featPickGroup(kind, state) {
+  const { skills, tools, expertise, elemental, weaponTraining } = state;
+  switch (kind) {
+    case 'craft': return { label: 'Ferramentas de Artifista', count: 3, options: CRAFT_TOOLS.filter(key => !tools.has(key)) };
+    case 'music': return { label: 'Instrumentos de Músico', count: 3, options: INSTRUMENTS.filter(key => !tools.has(key)) };
+    case 'skilled': return { label: 'Proficiências de Habilidoso', count: 3,
+      options: [...SKILL_KEYS.filter(key => !skills.has(key)), ...TOOLS.filter(key => !tools.has(key))] };
+    case 'knowledge': return { label: 'Perícia de conhecimento', count: 1, options: ['Arcana', 'History', 'Investigation', 'Nature', 'Religion'].filter(key => !expertise.has(key)) };
+    case 'observant': return { label: 'Perícia de observação', count: 1, options: ['Insight', 'Investigation', 'Perception'].filter(key => !expertise.has(key)) };
+    case 'expert': return { label: 'Nova proficiência em perícia', count: 1, options: SKILL_KEYS.filter(key => !skills.has(key)) };
+    case 'element': return { label: 'Tipo de dano elemental', count: 1, options: ELEMENTS.filter(key => !elemental.has(key)) };
+    case 'energy': return { label: 'Resistências à energia', count: 2, options: ENERGY };
+    case 'mastery': return { label: 'Maestria de arma', count: 1, options: Object.keys(WEAPONS).filter(name => isWeaponProficient(name, weaponTraining)) };
+    default: return null;
+  }
+}
+
+function resolveFeats(build, background, scores, baseSkills, baseTools, startingSaves, armorTraining, weaponTraining) {
+  const entries = build.classes, slots = featSlots(build), applied = [], issues = [];
+  const names = new Set(), skills = new Set(baseSkills), tools = new Set(baseTools), saves = new Set(startingSaves);
+  const expertise = new Set(entries.flatMap(entry => expertOptions(entry, baseSkills).values)), elemental = new Set();
+  const state = { skills, tools, expertise, elemental, weaponTraining };
+  const benefits = { hp: 0, speed: 0, mastery: [], resistances: [], expertise: [] };
+  const origins = [
+    { id: 'origin:background', name: background?.feat, source: background?.name },
+    ...(build.species === 'human' && humanFeatOptions(background?.feat).includes(build.humanFeat)
+      ? [{ id: 'origin:human', name: build.humanFeat, source: 'Humano' }] : []),
+  ].filter(row => ORIGIN_FEATS.includes(row.name) || row.name && build.background === 'custom' && row.id === 'origin:background');
+  let usedLegacySkilled = false;
+
+  function resolve(id, choice, source, slot) {
+    const info = featInfo(choice?.name);
+    const title = choice?.name === 'Custom' ? choice.label?.trim() : choice?.name;
+    if (!title) return null;
+    const abilityOptions = (info?.abilities ?? []).filter(ability => scores[ability] < info.limit && (!info.save || !saves.has(ability)));
+    const requested = pickList(choice.values, ABILITY_KEYS);
+    const abilityPicks = requested.filter(key => abilityOptions.includes(key));
+    const points = choice.name === 'Ability Score Improvement' && abilityPicks.length === 1 ? 2 : 1;
+    const validPoints = !info?.abilities || abilityPicks.length === requested.length &&
+      abilityPicks.length >= 1 && abilityPicks.length <= (choice.name === 'Ability Score Improvement' ? 2 : 1) &&
+      abilityPicks.every(ability => scores[ability] + points <= info.limit);
+    const ownChoices = build.featChoices?.[id];
+    const legacySkilled = info?.choices === 'skilled' && !usedLegacySkilled;
+    if (legacySkilled) usedLegacySkilled = true;
+    const group = featPickGroup(info?.choices, state);
+    const selected = group ? pickList(ownChoices?.selected ?? (legacySkilled ? build.skilled : []), group.options).slice(0, group.count) : [];
+    const expertSkill = info?.choices === 'expert' || info?.choices === 'allSkills';
+    const expertOptions = expertSkill ? SKILL_KEYS.filter(key => !expertise.has(key) &&
+      (info.choices === 'allSkills' || skills.has(key) || selected.includes(key))) : [];
+    const expert = expertOptions.includes(ownChoices?.expertise) ? ownChoices.expertise : '';
+    const row = { id, name: choice.name, label: info?.label ?? title, source, info, abilityOptions, abilityPicks, group,
+      selected, expertOptions, expertSkill, expert, ability: abilityPicks[0] };
+    const incomplete = Boolean(group && selected.length < group.count || expertSkill && !expert);
+    if (slot && !validPoints) issues.push(`${source}: resolva o bônus de atributo de ${row.label}.`);
+    if (incomplete) issues.push(`${row.label} · ${source}: complete as escolhas.`);
+    if (!validPoints) return row;
+    abilityPicks.forEach(ability => { scores[ability] += points; if (info.save) saves.add(ability); });
+    (info?.training ?? []).forEach(item => armorTraining.add(item));
+    if (info?.martial) weaponTraining.add('martial');
+    if (info?.tool) tools.add(info.tool);
+    if (info?.hp) benefits.hp += info.hp;
+    if (info?.speed) benefits.speed += info.speed;
+    for (const pick of selected) {
+      if (['craft', 'music', 'skilled'].includes(info.choices) && TOOLS.includes(pick)) tools.add(pick);
+      if (['skilled', 'expert'].includes(info.choices) && has(SKILLS, pick)) skills.add(pick);
+      if (['knowledge', 'observant'].includes(info.choices)) {
+        if (skills.has(pick)) { expertise.add(pick); benefits.expertise.push(pick); }
+        else skills.add(pick);
+      }
+      if (info.choices === 'element') elemental.add(pick);
+      if (info.choices === 'energy') benefits.resistances.push(pick);
+      if (info.choices === 'mastery') benefits.mastery.push(pick);
+    }
+    if (info?.choices === 'allSkills') SKILL_KEYS.forEach(key => skills.add(key));
+    if (expert) { expertise.add(expert); benefits.expertise.push(expert); }
+    names.add(title);
+    applied.push({ ...row, name: info ? choice.name : title });
+    return row;
+  }
+
+  const originRows = origins.map(({ id, name, source }) => resolve(id, { name }, source));
+  const levelRows = slots.map(slot => {
+    // Multiclass records store class levels but have no order for individual level-ups.
+    const atSlot = entries.map(entry => entry.id === slot.classId ? { ...entry, level: slot.level } : entry);
+    const level = atSlot.reduce((total, entry) => total + entry.level, 0);
+    const features = new Set(atSlot.flatMap(entry => featureLevels(entry).slice(0, entry.level).flatMap(row => row.features)));
+    const magic = atSlot.map(classMagic).filter(Boolean);
+    const ownedStyles = entries.flatMap(classStyleSelections);
+    const options = FEAT_OPTIONS.filter(name => {
+      const info = featInfo(name), requires = info.requires;
+      return (info.level ?? 1) <= level && (!names.has(name) || info.repeatable) &&
+        (info.choices !== 'element' || ELEMENTS.some(type => !elemental.has(type))) &&
+        (!requires?.scores || requires.scores.some(key => scores[key] >= 13)) &&
+        (!requires?.armor || armorTraining.has(requires.armor)) &&
+        (!requires?.style || features.has('Fighting Style') && !ownedStyles.includes(name)) &&
+        (!requires?.spellcasting || magic.some(entry => entry.caster !== 'pact')) &&
+        (!requires?.magic || magic.length > 0);
+    });
+    const choice = build.feats[slot.id], custom = choice?.name === 'Custom' && choice.label?.trim() && !names.has(choice.label.trim());
+    const source = `${slot.name} · nível ${slot.level}`;
+    if (custom || options.includes(choice?.name)) return { ...slot, options, row: resolve(slot.id, choice, source, slot) };
+    issues.push(`${source}: escolha um talento para o qual o personagem se qualifica.`);
+    return { ...slot, options, row: null };
+  });
+  return { applied, names, skills, tools, saves, benefits, originRows, levelRows, issues };
+}
+
 const maxCircle = slots => slots.reduce((max, count, index) => count ? index + 1 : max, 0);
 function spellGroup(id, title, count, catalogs, min, max, ability, exclude = []) {
   const lists = Array.isArray(catalogs) ? catalogs : [catalogs];
@@ -229,7 +356,7 @@ const spellGrantsAt = (table, level) => Object.entries(table ?? {}).filter(([thr
   .flatMap(([, names]) => names);
 const magicSecrets = ['cleric', 'druid', 'wizard'];
 
-export function spellChoices(build, level) {
+export function spellChoices(build, level, acquired = featOrigins(build).map(name => ({ name }))) {
   const groups = [], granted = [];
   for (const entry of build.classes) {
     const data = classData(entry), subclass = activeSubclass(entry), magic = classMagic(entry);
@@ -270,13 +397,24 @@ export function spellChoices(build, level) {
       if (entry.level >= threshold) groups.push(spellGroup(`warlock:arcanum${index + 6}`, `Arcanum Místico · círculo ${index + 6}`, 1, 'warlock', index + 6, index + 6, ability));
     });
   }
-  for (const feat of featOrigins(build)) {
-    const caster = magicOrigin(feat);
+  for (const feat of acquired) {
+    const caster = magicOrigin(feat.name);
     if (caster) {
-      const ability = build.magicAbilities[feat] || 'wisdom';
-      groups.push(spellGroup(`${caster}:initiate0`, `${feat} · truques`, 2, caster, 0, 0, ability));
-      groups.push(spellGroup(`${caster}:initiate1`, `${feat} · magia de 1º círculo`, 1, caster, 1, 1, ability));
+      const ability = build.magicAbilities[feat.name] || 'wisdom', label = featInfo(feat.name).label;
+      groups.push(spellGroup(`${caster}:initiate0`, `${label} · truques`, 2, caster, 0, 0, ability));
+      groups.push(spellGroup(`${caster}:initiate1`, `${label} · magia de 1º círculo`, 1, caster, 1, 1, ability));
     }
+    const spellType = feat.info?.spells;
+    if (!spellType) continue;
+    const { id, label, ability } = feat;
+    const fixed = { fey: 'Misty Step', shadow: 'Invisibility', telekinetic: 'Mage Hand', telepathic: 'Detect Thoughts' }[spellType];
+    if (fixed) granted.push({ name: fixed, ability, source: label, id, ...(spellType !== 'telekinetic' ? { innate: 1, freeId: `${id}:fixed` } : {}) });
+    if (spellType === 'telekinetic' || spellType === 'telepathic') continue;
+    const schools = spellType === 'fey' ? ['Divination', 'Enchantment'] : ['Illusion', 'Necromancy'];
+    const ritual = spellType === 'ritual';
+    groups.push({ id: `${id}:feat-spell`, title: label, ability, min: 1, max: 1,
+      count: ritual ? proficiency(level) : 1, freeId: ritual ? '' : `${id}:chosen`,
+      options: Object.values(SPELLS).filter(spell => spell.level === 1 && (ritual ? spell.ritual : schools.includes(spell.school))) });
   }
   if (isInnateCaster(build)) {
     const names = innateSpells[build.lineage] ?? [];
@@ -329,18 +467,36 @@ function startingKit(build, starting, background) {
     for (const [item, count] of kit.items) {
       if (item === 'Holy Symbol') needsFocus = true;
       const name = item === 'Holy Symbol' && build.focus ? build.focus
-        : item === 'Gaming Set' && build.backgroundTool ? build.backgroundTool
-          : ['Musical Instrument', 'Chosen Tool'].includes(item) && build.classes[0]?.tools?.[0] ? build.classes[0].tools[0] : item;
+        : ['Gaming Set', 'Background Tool'].includes(item) ? build.backgroundTool
+          : item === 'Background Kit Tool' ? build.backgroundKitTool
+            : ['Musical Instrument', 'Chosen Tool'].includes(item) && build.classes[0]?.tools?.[0] ? build.classes[0].tools[0] : item;
+      if (!name) continue;
       equipment.set(name, (equipment.get(name) ?? 0) + count);
     }
   }
   return { items: [...equipment], coins, needsFocus };
 }
 
-export function armorClass(armor, shield, modifiers, entries, armorTraining) {
+export function updateStartingEquipment(play, previous, next) {
+  const items = new Map(play.items);
+  const before = new Map(previous.items), after = new Map(next.items);
+  for (const item of new Set([...before.keys(), ...after.keys()])) {
+    const change = (after.get(item) ?? 0) - (before.get(item) ?? 0);
+    if (!change) continue;
+    const quantity = (items.get(item) ?? 0) + change;
+    if (quantity > 0) items.set(item, quantity);
+    else items.delete(item);
+  }
+  return { ...play, items: [...items], coins: { ...play.coins, gp: bounded(play.coins.gp + next.coins - previous.coins, 0, 999999) },
+    armor: play.armor && !items.has(play.armor) && before.has(play.armor) ? '' : play.armor,
+    shield: play.shield && (items.has('Shield') || !before.has('Shield')) };
+}
+
+export function armorClass(armor, shield, modifiers, entries, armorTraining, feats = new Set()) {
   const [base, type] = ARMOR[armor] ?? [];
   let total = 10 + modifiers.dexterity;
-  if (type) total = base + (type === 'heavy' ? 0 : type === 'medium' ? Math.min(2, modifiers.dexterity) : modifiers.dexterity);
+  if (type) total = base + (type === 'heavy' ? 0 : type === 'medium'
+    ? Math.min(feats.has('Medium Armor Master') ? 3 : 2, modifiers.dexterity) : modifiers.dexterity);
   else {
     const defense = entries.find(entry => ['monk', 'barbarian'].includes(entry.id));
     if (defense?.id === 'barbarian') total += modifiers.constitution;
@@ -351,7 +507,7 @@ export function armorClass(armor, shield, modifiers, entries, armorTraining) {
     }
   }
   if (shield && armorTraining.has('shield')) total += 2;
-  if (type && entries.some(entry => hasStyle(entry, 'Defense'))) total += 1;
+  if (type && (entries.some(entry => hasStyle(entry, 'Defense')) || feats.has('Defense'))) total += 1;
   return total;
 }
 
@@ -363,48 +519,14 @@ export function buildDetails(build, spellSelections, name = '') {
   const pb = proficiency(level);
   const abilities = abilityValues(build, background);
   const { scores } = abilities;
-  const origins = featOrigins(build);
-  const feats = featSlots(build);
-  const featIssues = [];
-  const gainedFeats = new Set(origins);
-  for (const slot of feats) {
-    const choice = build.feats[slot.id];
-    const points = choice?.name === 'Ability Score Improvement' ? [2] : [1];
-    const picks = pickList(choice?.values, ABILITY_KEYS);
-    if (choice?.name === 'Ability Score Improvement' && picks.length === 2) points.splice(0, 1, 1, 1);
-    const allowed = slot.epic ? ['Boon of Fate', 'Boon of Combat Prowess', 'Ability Score Improvement', 'Custom'] : ['Ability Score Improvement', 'Grappler', 'Tough', 'Custom'];
-    const requiresScores = ['Ability Score Improvement', 'Grappler', 'Boon of Fate', 'Boon of Combat Prowess'].includes(choice?.name);
-    const name = choice?.name === 'Custom' ? choice.label?.trim() : choice?.name;
-    if (!allowed.includes(choice?.name) || !name || name !== 'Ability Score Improvement' && gainedFeats.has(name) ||
-      requiresScores && (picks.length !== points.length || picks.some((key, index) => scores[key] + points[index] > (choice.name.startsWith('Boon') ? 30 : 20))) ||
-      choice?.name === 'Grappler' && (!['strength', 'dexterity'].includes(picks[0]) || Math.max(scores.strength, scores.dexterity) < 13)) {
-      featIssues.push(`${slot.name} nível ${slot.level}: escolha um talento e resolva seus ajustes.`);
-      continue;
-    }
-    gainedFeats.add(name);
-    if (requiresScores) picks.forEach((key, index) => { scores[key] += points[index]; });
-  }
-  const modifiers = Object.fromEntries(ABILITY_KEYS.map(key => [key, modifier(scores[key])]));
   const skillGroups = skillChoiceGroups(build, background);
   const baseSkills = unique([...(background?.skills ?? []), ...subclassSkills(build), ...skillGroups.flatMap(group => group.values)]);
-  const baseTools = unique([background?.tool || build.backgroundTool, ...entries.flatMap(entry => [
+  const backgroundTool = background?.tools?.includes(build.backgroundTool) ? build.backgroundTool : '';
+  const baseTools = unique([background?.tool || backgroundTool, ...entries.flatMap(entry => [
     ...(classData(entry).tools ?? []), ...(entry.tools ?? []),
     ...(activeSubclass(entry)?.id === 'Assassin' ? ['Kit de disfarce', 'Kit de envenenador'] : []),
     ...(activeSubclass(entry)?.id === 'Warrior of Mercy' ? ['Kit de herbalismo'] : []),
   ])].filter(Boolean));
-  const skilled = origins.includes('Skilled') ? pickList(build.skilled, [...SKILL_KEYS, ...TOOLS].filter(key => !baseSkills.includes(key) && !baseTools.includes(key))).slice(0, 3) : [];
-  const proficientSkills = unique([...baseSkills, ...skilled.filter(key => has(SKILLS, key))]);
-  const expertiseGroups = entries.map(entry => {
-    const scholar = entry.id === 'wizard' && entry.level >= 2;
-    const count = entry.id === 'rogue' ? (entry.level >= 6 ? 4 : 2)
-      : entry.id === 'bard' && entry.level >= 2 ? (entry.level >= 9 ? 4 : 2)
-        : entry.id === 'ranger' && entry.level >= 2 || scholar ? 1 : 0;
-    const allowed = scholar ? proficientSkills.filter(skill => ['Arcana', 'History', 'Investigation', 'Medicine', 'Nature', 'Religion'].includes(skill)) : proficientSkills;
-    return { id: entry.id, title: scholar ? 'Acadêmico · Mago' : `Especialização · ${classData(entry).name}`,
-      count, allowed, values: pickList(entry.expertise, allowed).slice(0, count) };
-  }).filter(group => group.count);
-  const expertise = unique(expertiseGroups.flatMap(group => group.values));
-  const saves = entries.some(entry => entry.id === 'monk' && entry.level >= 14) ? ABILITY_KEYS : starting?.saves ?? [];
   const armorTraining = new Set(entries.flatMap((entry, index) => {
     const data = classData(entry);
     const proper = index === 0 ? data.armor : data.multiclassArmor ?? [];
@@ -419,22 +541,31 @@ export function buildDetails(build, spellSelections, name = '') {
       activeSubclass(entry)?.id === 'College of Valor') return 'martial';
     return index === 0 ? data.weapons : data.multiclassWeapons ?? '';
   }));
+  const feat = resolveFeats(build, background, scores, baseSkills, baseTools, starting?.saves ?? [], armorTraining, weaponTraining);
+  const { applied: acquiredFeats, names: gainedFeats, originRows, levelRows: feats, benefits } = feat;
+  const origins = unique(originRows.map(row => row.name));
+  const modifiers = Object.fromEntries(ABILITY_KEYS.map(key => [key, modifier(scores[key])]));
+  const proficientSkills = [...feat.skills];
+  const expertiseGroups = entries.map(entry => expertOptions(entry, proficientSkills.filter(key => !benefits.expertise.includes(key))))
+    .filter(group => group.count);
+  const expertise = unique([...expertiseGroups.flatMap(group => group.values), ...benefits.expertise]);
+  const saves = entries.some(entry => entry.id === 'monk' && entry.level >= 14) ? ABILITY_KEYS : [...feat.saves];
   const equipment = startingKit(build, starting, background);
   const armor = equipment.items.find(([item]) => has(ARMOR, item))?.[0] ?? '';
   const shield = equipment.items.some(([item]) => item === 'Shield');
-  const ac = armorClass(armor, shield, modifiers, entries, armorTraining);
-  const alert = origins.includes('Alert') ? pb : 0;
+  const ac = armorClass(armor, shield, modifiers, entries, armorTraining, gainedFeats);
+  const alert = gainedFeats.has('Alert') ? pb : 0;
   const tough = gainedFeats.has('Tough');
   const hp = Math.max(1, entries.reduce((sum, entry, index) => {
     const faces = classData(entry).hitDie;
     const first = index === 0 ? 1 : 0;
     return sum + first * Math.max(1, faces + modifiers.constitution) +
       (entry.level - first) * Math.max(1, faces / 2 + 1 + modifiers.constitution);
-  }, (tough ? 2 : 0) * level + (species?.hpPerLevel ?? 0) * level +
+  }, benefits.hp + (tough ? 2 : 0) * level + (species?.hpPerLevel ?? 0) * level +
     (entries.find(entry => entry.id === 'sorcerer' && entry.level >= 3 && entry.subclass === 'Draconic Sorcery')?.level ?? 0)));
   const speed = species?.speed ?? 30;
   const darkvision = build.species === 'elf' && build.lineage === 'Drow' ? 120 : species?.darkvision ?? 0;
-  const spell = spellChoices(build, level);
+  const spell = spellChoices(build, level, acquiredFeats);
   const selected = selectionsFor(spell.groups, spellSelections);
   const issues = Object.fromEntries(BUILDER_STEPS.map(step => [step, []]));
   if (!entries.length) issues.Classe.push('Escolha a classe inicial.');
@@ -462,27 +593,33 @@ export function buildDetails(build, spellSelections, name = '') {
     const toolCount = index === 0 ? data.toolPicks ?? 0 : entry.id === 'bard' ? 1 : 0;
     if (toolCount > (entry.tools?.length ?? 0)) issues.Perícias.push(`${data.name}: complete as ferramentas ou instrumentos.`);
   });
+  const styles = entries.flatMap(classStyleSelections);
+  if (unique(styles).length < styles.length) issues.Classe.push('Escolha estilos de luta diferentes para as classes.');
   if (!species?.name || species.lineages && !species.lineages.includes(build.lineage)) issues.Espécie.push('Escolha a espécie e a linhagem, quando aplicável.');
   if (isInnateCaster(build) && !['intelligence', 'wisdom', 'charisma'].includes(build.speciesAbility)) issues.Espécie.push('Escolha o atributo da magia inata.');
   if (!background?.name || background.abilities.length !== 3 || background.skills.length !== 2 || !background.feat) issues.Antecedente.push('Complete o antecedente.');
   if (!abilities.methodOk || !abilities.bonusOk) issues.Atributos.push('Distribua os seis atributos e os bônus de antecedente.');
-  if (build.species === 'human' && !ORIGIN_FEATS.includes(build.humanFeat)) issues.Talentos.push('Escolha o talento de origem do Humano.');
-  for (const feat of origins) if (magicOrigin(feat) && !['intelligence', 'wisdom', 'charisma'].includes(build.magicAbilities[feat])) issues.Talentos.push(`${feat}: escolha o atributo de conjuração.`);
-  issues.Talentos.push(...featIssues);
+  if (build.species === 'human' && !humanFeatOptions(background?.feat).includes(build.humanFeat)) issues.Talentos.push('Escolha o talento de origem do Humano.');
+  for (const row of acquiredFeats) if (magicOrigin(row.name) && !['intelligence', 'wisdom', 'charisma'].includes(build.magicAbilities[row.name])) {
+    issues.Talentos.push(`${row.label}: escolha o atributo de conjuração.`);
+  }
+  issues.Talentos.push(...feat.issues);
   for (const group of skillGroups) if (group.values.length < group.count) issues.Perícias.push(`${group.title}: selecione ${group.count - group.values.length} perícia(s).`);
   for (const group of expertiseGroups) if (group.values.length < group.count) issues.Perícias.push(`${classData(entries.find(entry => entry.id === group.id)).name}: complete as especializações.`);
   if (background?.tools && !background.tools.includes(build.backgroundTool)) issues.Perícias.push('Escolha a ferramenta de antecedente.');
-  if (origins.includes('Skilled') && skilled.length < 3) issues.Perícias.push('Skilled: complete as três proficiências.');
   for (const group of spell.groups) {
     const count = selected[group.id]?.length ?? 0;
     if (count < group.count) issues.Magias.push(`${group.title}: ${count}/${group.count}.`);
   }
   if (!starting?.kits[build.classKit] || !background?.kits[build.backgroundKit] || equipment.needsFocus && !build.focus) issues.Equipamento.push('Complete os pacotes iniciais e o símbolo sagrado, se houver.');
+  if (build.backgroundKit === '0' && background?.kitTools && !background.kitTools.includes(build.backgroundKitTool)) {
+    issues.Equipamento.push('Escolha o jogo que acompanha o pacote do antecedente.');
+  }
   if (!name.trim()) issues.Sobre.push('Informe o nome do personagem.');
   if (pickList(build.languages, LANGUAGES.filter(key => key !== 'Comum')).length !== 2) issues.Sobre.push('Escolha dois idiomas além do Comum.');
   const jackOfAllTrades = entries.some(entry => entry.id === 'bard' && entry.level >= 2);
-  const archery = entries.some(entry => hasStyle(entry, 'Archery'));
-  const tools = [...baseTools, ...skilled.filter(key => TOOLS.includes(key))];
+  const archery = entries.some(entry => hasStyle(entry, 'Archery')) || gainedFeats.has('Archery');
+  const tools = [...feat.tools];
   const resistance = species?.resistance ?? (build.species === 'dragonborn' ? dragonResistance[build.lineage] : build.species === 'tiefling'
     ? { Abissal: 'Veneno', Ctônico: 'Necrótico', Infernal: 'Fogo' }[build.lineage] : undefined);
   const knowledgeBonus = Object.fromEntries(SKILL_KEYS.flatMap(skill => entries.flatMap(entry =>
@@ -491,9 +628,10 @@ export function buildDetails(build, spellSelections, name = '') {
       ? [[skill, Math.max(1, modifiers.wisdom)]] : [])));
   const cleric = entries.find(entry => entry.id === 'cleric' && entry.level >= 7);
   return { level, pb, ...abilities, modifiers, skillGroups, proficientSkills, expertiseGroups, expertise, saves, armorTraining, weaponTraining, equipment,
-    hp, ac, armor, shield, tools, baseSkills, baseTools, resistance, jackOfAllTrades, archery, knowledgeBonus,
+    hp, ac, armor, shield, tools, baseSkills, baseTools, resistance, resistances: unique([resistance, ...benefits.resistances].filter(Boolean)),
+    featMastery: benefits.mastery, acquiredFeats, gainedFeats, originRows, jackOfAllTrades, archery, knowledgeBonus,
     initiative: modifiers.dexterity + (alert || (jackOfAllTrades ? Math.floor(pb / 2) : 0)),
-    speed: speed + (build.species === 'elf' && build.lineage === 'Elfo da floresta' ? 5 : 0),
+    speed: speed + benefits.speed + (build.species === 'elf' && build.lineage === 'Elfo da floresta' ? 5 : 0),
     darkvision, species, background, origins, feats, ...spell, selected, slots: spellSlots(entries), blessedStrike: cleric?.blessedStrike,
     pact: entries.filter(entry => entry.id === 'warlock').map(levelRow)[0],
     favoredEnemy: entries.filter(entry => entry.id === 'ranger').map(levelRow)[0]?.favoredEnemy ?? 0, issues };
@@ -535,8 +673,11 @@ export function resourceCaps(build, details) {
       default: break;
     }
   }
-  if (details.origins.some(magicOrigin)) {
-    details.origins.filter(magicOrigin).forEach(feat => resource(`initiate:${magicOrigin(feat)}`, `${feat} · conjuração livre`, 1));
+  for (const row of details.acquiredFeats) {
+    if (magicOrigin(row.name)) resource(`initiate:${magicOrigin(row.name)}`, `${row.label} · conjuração livre`, 1);
+    if (row.name === 'Lucky') resource('feat:lucky', 'Pontos de Sorte', details.pb);
+    if (row.name === 'Ritual Caster') resource('feat:quick-ritual', 'Ritual rápido', 1);
+    if (row.name === 'Mage Slayer') resource('feat:guarded-mind', 'Mente protegida', 1, Infinity);
   }
   if (build.species === 'dragonborn') resource('breath', 'Sopro dracônico', details.pb);
   if (build.species === 'goliath') resource('giant', 'Ancestralidade gigante', details.pb);
@@ -554,14 +695,19 @@ export function skillBonus(skill, details) {
     (!trained && details.jackOfAllTrades ? Math.floor(details.pb / 2) : 0);
 }
 
+function isWeaponProficient(item, training) {
+  const traits = WEAPONS[item]?.[3] ?? '';
+  const eligible = !traits.includes('martial') ? ['simple', 'martial', 'monk', 'rogue']
+    : ['martial', ...(traits.includes('light') ? ['monk', 'rogue'] : []), ...(traits.includes('finesse') ? ['rogue'] : [])];
+  return eligible.some(value => training.has(value));
+}
+
 export function weaponStats(item, details) {
   if (!has(WEAPONS, item)) return null;
   const [formula, damageType, mastery, traits = '', range = '5 pés'] = WEAPONS[item];
   const ranged = traits.includes('ranged');
   const ability = ranged || traits.includes('finesse') && details.modifiers.dexterity > details.modifiers.strength ? 'dexterity' : 'strength';
-  const eligible = !traits.includes('martial') ? ['simple', 'martial', 'monk', 'rogue']
-    : ['martial', ...(traits.includes('light') ? ['monk', 'rogue'] : []), ...(traits.includes('finesse') ? ['rogue'] : [])];
-  const trained = eligible.some(value => details.weaponTraining.has(value));
+  const trained = isWeaponProficient(item, details.weaponTraining);
   const attack = details.modifiers[ability] + (trained ? details.pb : 0) + (ranged && details.archery ? 2 : 0);
   return { formula, damageType, mastery, ability, range, attack, damageModifier: details.modifiers[ability] };
 }
@@ -688,7 +834,7 @@ export function storeCharacter(stats, build, spellSelections, play, details) {
     species: details.species?.name ?? '', background: details.background?.name ?? '',
     hp: `${hp}/${max}`, hpTemp: String(temp),
     experience: String(play.experience),
-    ac: String(armorClass(play.armor, play.shield, details.modifiers, build.classes, details.armorTraining)),
+    ac: String(armorClass(play.armor, play.shield, details.modifiers, build.classes, details.armorTraining, details.gainedFeats)),
     initiative: String(details.initiative), speed: String(details.speed),
     passivePerception: String(10 + skillBonus('Perception', details)),
     savingThrows: details.saves.map(key => ABILITIES[key][0]).join(', '),

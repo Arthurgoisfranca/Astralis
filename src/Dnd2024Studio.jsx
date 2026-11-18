@@ -3,7 +3,7 @@ import Dnd2024Builder from './Dnd2024Builder.jsx';
 import Dnd2024Sheet from './Dnd2024Sheet.jsx';
 import { SRD_CREDIT, SRD_LICENSE, SRD_URL } from './domain/dnd2024Catalog.mjs';
 import { BUILD_STAT, DATA_LIMIT, PLAY_STAT, SPELL_STAT, buildDetails, demoGabriel, readBuild, readPlay, readRecord,
-  rerollDndTest, signedNumber, storeCharacter } from './domain/dnd2024Rules.mjs';
+  rerollDndTest, signedNumber, storeCharacter, updateStartingEquipment } from './domain/dnd2024Rules.mjs';
 import './dnd2024Studio.css';
 
 export const ABOUT_STAT = 'dnd2024About';
@@ -126,7 +126,12 @@ export default function Dnd2024Studio({ player, form, setForm, onTokenOpen, onCl
 
   function complete() {
     if (Object.values(details.issues).some(issues => issues.length)) return;
-    const input = importedPlay.current ?? (stats[BUILD_STAT] ? play : null);
+    const storedBuild = stats[BUILD_STAT] ? readBuild(stats[BUILD_STAT]) : null;
+    const snapshot = importedPlay.current ?? (storedBuild ? { build: storedBuild, play,
+      equipment: buildDetails(storedBuild, readRecord(stats[SPELL_STAT])).equipment } : null);
+    const changesKit = snapshot && ['background', 'backgroundKit', 'backgroundTool', 'backgroundKitTool', 'classKit', 'focus']
+      .some(key => snapshot.build[key] !== build[key]);
+    const input = changesKit ? updateStartingEquipment(snapshot.play, snapshot.equipment, details.equipment) : snapshot?.play;
     const fresh = readPlay({}, details);
     const next = input ? { ...fresh, ...input, max: details.hp,
       hp: input.hp > 0 ? Math.max(1, Math.min(details.hp, input.hp + details.hp - input.max)) : 0 } : fresh;
@@ -157,7 +162,8 @@ export default function Dnd2024Studio({ player, form, setForm, onTokenOpen, onCl
     setSpells(demo.spells);
     setAbout(demo.about);
     onText('name', demo.name);
-    importedPlay.current = readPlay({}, buildDetails(demo.build, demo.spells, demo.name));
+    const initialDetails = buildDetails(demo.build, demo.spells, demo.name);
+    importedPlay.current = { build: demo.build, equipment: initialDetails.equipment, play: readPlay({}, initialDetails) };
     go('Revisão');
   }
 
@@ -189,8 +195,10 @@ export default function Dnd2024Studio({ player, form, setForm, onTokenOpen, onCl
     setAbout(description);
     setForm(old => ({ ...old, name, notes: String(data.notes ?? '').slice(0, 3000),
       appearance: String(data.appearance ?? '').slice(0, 2000) }));
-    importedPlay.current = data.statPlay && String(data.statPlay).length <= DATA_LIMIT
-      ? readPlay({ [PLAY_STAT]: data.statPlay, hp: data.hp, hpTemp: data.temp }, buildDetails(draft, choices, name)) : null;
+    const initialDetails = buildDetails(draft, choices, name);
+    importedPlay.current = { build: draft, equipment: initialDetails.equipment,
+      play: readPlay(data.statPlay && String(data.statPlay).length <= DATA_LIMIT
+        ? { [PLAY_STAT]: data.statPlay, hp: data.hp, hpTemp: data.temp } : {}, initialDetails) };
     setBuilder(true);
     go('Revisão');
     setMessage('Revise as escolhas e monte a ficha para aplicar o rascunho.');

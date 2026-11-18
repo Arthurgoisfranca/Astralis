@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ABILITIES, ABILITY_KEYS, ARMOR, SKILLS, SKILL_KEYS, SPELLS, spellLabel } from './domain/dnd2024Catalog.mjs';
-import { activeSubclass, armorClass, bounded, changeHP, classData, featureLevels, levelRow, metamagicCapacity, recover, resourceCaps,
+import { ABILITIES, ABILITY_KEYS, ARMOR, FEAT_CATEGORIES, SKILLS, SKILL_KEYS, SPELLS, featInfo, spellLabel } from './domain/dnd2024Catalog.mjs';
+import { activeSubclass, armorClass, bounded, changeHP, classData, classStyleSelections, featureLevels, levelRow, metamagicCapacity, recover, resourceCaps,
   rollDamage, rollDndTest, signedNumber, skillBonus, subclassLabel, usesLeft, weaponStats } from './domain/dnd2024Rules.mjs';
 import { die } from './domain/manualRules.mjs';
 import { Select, TextField } from './Dnd2024Builder.jsx';
@@ -88,7 +88,7 @@ function Combat({ build, details, play, onPlay, roll, damage, last, stats }) {
   const unarmed = { name: 'Golpe desarmado', attack: details.pb + details.modifiers[unarmedAbility], ability: unarmedAbility,
     formula: martialArts ? levelRow(martialArts).martialArts : '1', damageModifier: details.modifiers[unarmedAbility], range: '5 pés' };
   const attacks = [unarmed, ...weapons, ...listed].filter(item => item.name.toLowerCase().includes(weaponSearch.toLowerCase()));
-  const mastery = [...new Set(build.classes.flatMap(entry => entry.mastery ?? []))];
+  const mastery = new Set([...build.classes.flatMap(entry => entry.mastery ?? []), ...details.featMastery]);
   const recorded = Array.isArray(play.actions) ? play.actions : [];
   return <>
     <h3>Ataques e dano</h3>
@@ -99,7 +99,7 @@ function Combat({ build, details, play, onPlay, roll, damage, last, stats }) {
       <button type="button" onClick={() => roll(item.name, 'attack', item.attack, { weapon: true, ability: item.ability })}>Ataque {signedNumber(item.attack)}</button>
       <button type="button" disabled={!item.formula} onClick={() => damage(item.name, item.formula, item.damageModifier,
         critical || last?.label === item.name && last.critical)}>Dano {item.formula}{item.damageModifier ? signedNumber(item.damageModifier) : ''}</button>
-      {mastery.includes(item.name) && <small>Maestria · {item.mastery}</small>}
+      {mastery.has(item.name) && <small>Maestria · {item.mastery}</small>}
     </article>)}</div>
     <details className="dnd24-subcard"><summary>Efeitos de rolagem</summary>
       <label className="dnd24-toggle"><input type="checkbox" checked={play.bless}
@@ -125,7 +125,9 @@ function Combat({ build, details, play, onPlay, roll, damage, last, stats }) {
 
 function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
   const spells = [
-    ...details.groups.flatMap(group => details.selected[group.id].map(name => ({ name, id: group.id, source: group.title, ability: group.ability }))),
+    ...details.groups.flatMap(group => details.selected[group.id].map(name => ({
+      name, id: group.id, source: group.title, ability: group.ability, freeId: group.freeId,
+    }))),
     ...details.granted,
   ];
   const regular = details.slots.flatMap((max, index) => max ? [{ id: `slot${index + 1}`, level: index + 1, max }] : []);
@@ -146,10 +148,10 @@ function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
       const [kind, formula, savingAbility] = SPELL_ROLLS[entry.name] ?? [];
       const slot = slots.find(item => item.level >= level && usesLeft(play, item.id, item.max) > 0);
       const arcanum = entry.id.includes(':arcanum');
-      const freeId = arcanum ? entry.id : entry.id.includes(':initiate1') ? `initiate:${entry.id.split(':')[0]}`
+      const freeId = entry.freeId || (arcanum ? entry.id : entry.id.includes(':initiate1') ? `initiate:${entry.id.split(':')[0]}`
         : entry.name === 'Divine Smite' && entry.id === 'paladin' ? 'divine-smite'
           : entry.name === 'Hunter’s Mark' && entry.id === 'ranger' ? 'favored-enemy'
-            : entry.innate ? `innate:${entry.name}` : '';
+            : entry.innate ? `innate:${entry.name}` : '');
       const freeMax = freeId === 'favored-enemy' ? details.favoredEnemy : entry.innate === 'pb' ? details.pb : 1;
       const cantripDice = details.level >= 17 ? 4 : details.level >= 11 ? 3 : details.level >= 5 ? 2 : 1;
       const beams = entry.name === 'Eldritch Blast' ? cantripDice : 0;
@@ -162,6 +164,8 @@ function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
         {beams > 1 && <p>{beams} raios · role ataque e dano para cada raio.</p>}
         {spell?.components && <p>{spell.components.split('').join(' / ')} · {spell.range} · {spell.duration}</p>}
         <div className="dnd24-actions">
+          {spell?.ritual && <button type="button"
+            onClick={() => log({ label, status: 'Ritual', detail: 'Conjuração sem espaço de magia. Acrescente 10 minutos ao tempo normal.' })}>Conjurar como ritual</button>}
           {kind === 'attack' && <button type="button" onClick={() => roll(label, 'attack', details.pb + mod, { ability: entry.ability })}>Rolar ataque</button>}
           {kind === 'save' && <span>Salvaguarda de {savingAbility} · CD {8 + details.pb + mod}</span>}
           {rollDice && <button type="button" onClick={() => damage(label, rollDice, kind === 'heal' || potent ? mod : 0,
@@ -213,6 +217,7 @@ function Inventory({ details, play, onPlay }) {
 }
 
 function Traits({ build, details }) {
+  const styles = [...new Set(build.classes.flatMap(classStyleSelections))];
   return <>
     <h3>Traços e recursos de classe</h3>
     {build.classes.map(entry => <details key={entry.id} className="dnd24-subcard" open>
@@ -223,7 +228,18 @@ function Traits({ build, details }) {
       <ul className="dnd24-plain-list">{featureLevels(entry).filter(row => row.level <= entry.level && row.features.length).reverse()
         .map(row => <li key={row.level}><small>Nível {row.level}</small> {row.features.join(' · ')}</li>)}</ul>
     </details>)}
-    <p>{details.species?.traits?.join(' · ')}</p><p>{details.origins.join(' · ')}</p>
+    <p>{details.species?.traits?.join(' · ')}</p>
+    <h3>Talentos</h3>
+    {details.acquiredFeats.map(row => <details key={row.id} className="dnd24-subcard">
+      <summary><strong>{row.label}</strong> · {row.source}{row.info && ` · ${FEAT_CATEGORIES[row.info.category]}`}</summary>
+      {row.info?.summary && <p>{row.info.summary}</p>}
+      {row.abilityPicks.length > 0 && <p>Atributos · {row.abilityPicks.map(key => ABILITIES[key][0]).join(' · ')}</p>}
+      {row.selected.length > 0 && <p>{row.group.label} · {row.selected.map(key => SKILLS[key]?.[0] ?? key).join(' · ')}</p>}
+      {row.expert && <p>Especialização · {SKILLS[row.expert][0]}</p>}
+    </details>)}
+    {styles.map(name => <details key={name} className="dnd24-subcard">
+      <summary><strong>{featInfo(name).label}</strong> · Estilo de Luta</summary><p>{featInfo(name).summary}</p>
+    </details>)}
   </>;
 }
 
@@ -232,7 +248,7 @@ export default function Dnd2024Sheet({ build, details, play, onPlay, form, about
   const [target, setTarget] = useState('');
   const [mode, setMode] = useState('normal');
   const [error, setError] = useState('');
-  const ac = armorClass(play.armor, play.shield, details.modifiers, build.classes, details.armorTraining);
+  const ac = armorClass(play.armor, play.shield, details.modifiers, build.classes, details.armorTraining, details.gainedFeats);
   const speed = play.conditions.some(item => ['Agarrado', 'Contido', 'Paralisado', 'Inconsciente', 'Petrificado'].includes(item))
     ? 0 : Math.max(0, details.speed - 5 * play.exhaustion - ((ARMOR[play.armor]?.[2] ?? 0) > details.scores.strength ? 10 : 0));
   const resources = resourceCaps(build, details);
@@ -328,7 +344,7 @@ export default function Dnd2024Sheet({ build, details, play, onPlay, form, about
         {resources.map(resource => <Counter key={resource.id} title={resource.name} max={resource.max}
           current={usesLeft(play, resource.id, resource.max)} onChange={value => spend(resource.id, resource.max, value)}/>)}
         <h3>Defesas e condições</h3>
-        {details.resistance && <p>Resistência · {details.resistance}</p>}
+        {details.resistances.length > 0 && <p>Resistências · {details.resistances.join(' · ')}</p>}
         <Select label="Adicionar condição" value="" options={CONDITIONS.filter(item => !play.conditions.includes(item))}
           onChange={value => value && onPlay({ ...play, conditions: [...play.conditions, value] })}/>
         <div className="dnd24-conditions">{play.conditions.map(item => <button type="button" key={item} aria-label={`Remover condição ${item}`}

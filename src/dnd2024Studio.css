@@ -257,3 +257,7 @@
   .dnd24-attack-list article{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dnd24-attack-list article>div{grid-column:1/-1}
 }
+.dnd24-feat-catalogue{grid-column:1/-1}
+.dnd24-feat-catalogue>summary{cursor:pointer;font-weight:700}
+.dnd24-feat-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:8px;max-height:440px;overflow:auto}
+.dnd24-feat-list>article{margin:0}

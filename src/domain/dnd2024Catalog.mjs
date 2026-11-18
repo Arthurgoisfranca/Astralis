@@ -2,6 +2,7 @@ import progression from './dnd2024Progression.json' with { type: 'json' };
 import spellData from './dnd2024Spells.json' with { type: 'json' };
 import spellSummaries from './dnd2024SpellSummaries.json' with { type: 'json' };
 import subclasses from './dnd2024Subclasses.json' with { type: 'json' };
+export { FEATS, FEAT_OPTIONS, FEAT_CATEGORIES, ORIGIN_FEATS, STYLES, featInfo } from './dnd2024Feats.mjs';
 
 export const DND_2024 = 'D&D 5.5E (2024)';
 export const SRD_URL = 'https://www.dndbeyond.com/srd';
@@ -25,11 +26,16 @@ export const SKILLS = {
   Stealth: ['Furtividade', 'dexterity'], Survival: ['Sobrevivência', 'wisdom'],
 };
 export const SKILL_KEYS = Object.keys(SKILLS);
-export const TOOLS = [
-  'Ferramentas de ferreiro', 'Ferramentas de carpinteiro', 'Ferramentas de ladrão', 'Ferramentas de oleiro',
-  'Utensílios de calígrafo', 'Kit de herbalismo', 'Kit de disfarce', 'Kit de falsificação', 'Suprimentos de alquimista',
-  'Utensílios de cozinheiro', 'Baralho', 'Dados', 'Flauta', 'Laúde', 'Tambor',
-];
+export const CRAFT_TOOLS = ['Ferramentas de carpinteiro', 'Ferramentas de coureiro', 'Ferramentas de ferreiro',
+  'Ferramentas de funileiro', 'Ferramentas de oleiro', 'Ferramentas de pedreiro', 'Ferramentas de tecelão',
+  'Ferramentas de entalhador'];
+export const ARTISAN_TOOLS = [...CRAFT_TOOLS, 'Ferramentas de cartógrafo', 'Ferramentas de joalheiro',
+  'Ferramentas de sapateiro', 'Ferramentas de soprador de vidro', 'Suprimentos de alquimista', 'Suprimentos de cervejeiro',
+  'Suprimentos de pintor', 'Utensílios de calígrafo', 'Utensílios de cozinheiro'];
+export const INSTRUMENTS = ['Flauta', 'Flauta de Pã', 'Gaita de foles', 'Laúde', 'Lira', 'Oboé', 'Saltério', 'Tambor', 'Trompa', 'Viola'];
+export const GAMING_SETS = ['Dados', 'Baralho', 'Xadrez dracônico', 'Três Dragões'];
+export const TOOLS = [...ARTISAN_TOOLS, 'Ferramentas de ladrão', 'Ferramentas de navegador', 'Kit de herbalismo',
+  'Kit de disfarce', 'Kit de falsificação', 'Kit de envenenador', ...GAMING_SETS, ...INSTRUMENTS];
 export const LANGUAGES = ['Comum', 'Anão', 'Élfico', 'Gigante', 'Gnômico', 'Goblin', 'Halfling', 'Orc',
   'Linguagem de Sinais Comum', 'Dracônico'];
 
@@ -132,22 +138,71 @@ export const SPECIES = {
 
 export const BACKGROUNDS = {
   acolyte: { name: 'Acólito', abilities: ['intelligence', 'wisdom', 'charisma'], feat: 'Magic Initiate (Cleric)',
+    summary: 'Serviu em um templo ou santuário, onde aprendeu ritos e os fundamentos da magia divina.',
     skills: ['Insight', 'Religion'], tool: 'Utensílios de calígrafo',
     kits: [kit(8, ['Calligrapher’s Supplies', 'Book (Prayers)', 'Holy Symbol', ['Parchment', 10], 'Robe']), kit(50)] },
+  wayfarer: { name: 'Andarilho', abilities: ['dexterity', 'wisdom', 'charisma'], feat: 'Lucky',
+    summary: 'Cresceu nas ruas e aprendeu a aproveitar oportunidades e a sobreviver com poucos recursos.',
+    skills: ['Insight', 'Stealth'], tool: 'Ferramentas de ladrão', kitTools: GAMING_SETS,
+    kits: [kit(16, [['Dagger', 2], 'Ferramentas de ladrão', 'Background Kit Tool', ['Pouch', 2], "Traveler's Clothes", 'Bedroll']), kit(50)] },
+  artisan: { name: 'Artesão', abilities: ['strength', 'dexterity', 'intelligence'], feat: 'Crafter',
+    summary: 'Trabalhou como aprendiz em uma oficina e desenvolveu um olhar atento para materiais e acabamentos.',
+    skills: ['Investigation', 'Persuasion'], tools: ARTISAN_TOOLS,
+    kits: [kit(32, ['Background Tool', ['Pouch', 2], "Traveler's Clothes"]), kit(50)] },
+  entertainer: { name: 'Artista', abilities: ['strength', 'dexterity', 'charisma'], feat: 'Musician',
+    summary: 'Viajou com músicos e artistas e aprendeu a conquistar o público em feiras e festivais.',
+    skills: ['Acrobatics', 'Performance'], tools: INSTRUMENTS,
+    kits: [kit(11, ['Background Tool', 'Mirror', ['Costume', 2], 'Perfume', "Traveler's Clothes"]), kit(50)] },
+  charlatan: { name: 'Charlatão', abilities: ['dexterity', 'constitution', 'charisma'], feat: 'Skilled',
+    summary: 'Vivia da lábia e da habilidade de vender histórias convincentes, mercadorias falsas ou documentos forjados.',
+    skills: ['Deception', 'Sleight of Hand'], tool: 'Kit de falsificação',
+    kits: [kit(15, ['Kit de falsificação', 'Costume', 'Fine Clothes']), kit(50)] },
   criminal: { name: 'Criminoso', abilities: ['dexterity', 'constitution', 'intelligence'], feat: 'Alert',
+    summary: 'Aprendeu a trabalhar discretamente nas ruas, por conta própria ou junto de uma gangue.',
     skills: ['Sleight of Hand', 'Stealth'], tool: 'Ferramentas de ladrão',
     kits: [kit(16, [['Dagger', 2], "Thieves’ Tools", 'Crowbar', ['Pouch', 2], "Traveler's Clothes"]), kit(50)] },
+  hermit: { name: 'Eremita', abilities: ['constitution', 'wisdom', 'charisma'], feat: 'Healer',
+    summary: 'Viveu em isolamento e teve tempo para estudar remédios, religião e as questões que o levaram à reclusão.',
+    skills: ['Medicine', 'Religion'], tool: 'Kit de herbalismo',
+    kits: [kit(16, ['Quarterstaff', 'Kit de herbalismo', 'Lamp', 'Book (Philosophy)', ['Oil', 3], "Traveler's Clothes", 'Bedroll']), kit(50)] },
+  scribe: { name: 'Escriba', abilities: ['dexterity', 'intelligence', 'wisdom'], feat: 'Skilled',
+    summary: 'Trabalhou preservando textos e elaborando documentos. Aprendeu a copiar com precisão e a observar os detalhes.',
+    skills: ['Investigation', 'Perception'], tool: 'Utensílios de calígrafo',
+    kits: [kit(23, ['Calligrapher’s Supplies', 'Lamp', ['Oil', 3], ['Parchment', 12], 'Fine Clothes']), kit(50)] },
+  farmer: { name: 'Fazendeiro', abilities: ['strength', 'constitution', 'wisdom'], feat: 'Tough',
+    summary: 'Cresceu cuidando de animais e plantações, acostumado à rotina exigente do campo.',
+    skills: ['Animal Handling', 'Nature'], tool: 'Ferramentas de carpinteiro',
+    kits: [kit(30, ['Sickle', 'Ferramentas de carpinteiro', "Healer's Kit", 'Iron Pot', 'Shovel']), kit(50)] },
+  guard: { name: 'Guarda', abilities: ['strength', 'intelligence', 'wisdom'], feat: 'Alert',
+    summary: 'Vigiou muralhas e ruas, aprendeu a reconhecer ameaças e permaneceu atento durante longos turnos.',
+    skills: ['Athletics', 'Perception'], tools: GAMING_SETS,
+    kits: [kit(12, ['Spear', 'Light Crossbow', ['Crossbow Bolt', 20], 'Background Tool', 'Quiver', 'Manacles', 'Hooded Lantern', "Traveler's Clothes"]), kit(50)] },
+  guide: { name: 'Guia', abilities: ['dexterity', 'constitution', 'wisdom'], feat: 'Magic Initiate (Druid)',
+    summary: 'Conhece trilhas, marcos e perigos das regiões selvagens e já guiou viajantes por lugares remotos.',
+    skills: ['Stealth', 'Survival'], tool: 'Ferramentas de cartógrafo',
+    kits: [kit(3, ['Shortbow', ['Arrow', 20], 'Ferramentas de cartógrafo', 'Quiver', "Traveler's Clothes", 'Bedroll', 'Tent']), kit(50)] },
+  sailor: { name: 'Marinheiro', abilities: ['strength', 'dexterity', 'wisdom'], feat: 'Tavern Brawler',
+    summary: 'Trabalhou em navios, enfrentou tempestades e conheceu muitas tripulações e tavernas de porto.',
+    skills: ['Acrobatics', 'Perception'], tool: 'Ferramentas de navegador',
+    kits: [kit(20, ['Dagger', 'Ferramentas de navegador', 'Rope', "Traveler's Clothes"]), kit(50)] },
+  merchant: { name: 'Mercador', abilities: ['constitution', 'intelligence', 'charisma'], feat: 'Lucky',
+    summary: 'Aprendeu a fazer negócios e a transportar mercadorias entre cidades, mercados e rotas de caravanas.',
+    skills: ['Animal Handling', 'Persuasion'], tool: 'Ferramentas de navegador',
+    kits: [kit(22, ['Ferramentas de navegador', ['Pouch', 2], "Traveler's Clothes"]), kit(50)] },
+  noble: { name: 'Nobre', abilities: ['strength', 'intelligence', 'charisma'], feat: 'Skilled',
+    summary: 'Recebeu uma educação privilegiada e aprendeu etiqueta, negociação e liderança observando a corte.',
+    skills: ['History', 'Persuasion'], tools: GAMING_SETS,
+    kits: [kit(29, ['Background Tool', 'Perfume', 'Fine Clothes']), kit(50)] },
   sage: { name: 'Sábio', abilities: ['constitution', 'intelligence', 'wisdom'], feat: 'Magic Initiate (Wizard)',
+    summary: 'Buscou acesso a bibliotecas e manuscritos, dedicando anos aos estudos e aos rudimentos da magia.',
     skills: ['Arcana', 'History'], tool: 'Utensílios de calígrafo',
     kits: [kit(8, ['Quarterstaff', 'Calligrapher’s Supplies', 'Book (History)', ['Parchment', 8], 'Robe']), kit(50)] },
   soldier: { name: 'Soldado', abilities: ['strength', 'dexterity', 'constitution'], feat: 'Savage Attacker',
-    skills: ['Athletics', 'Intimidation'], tools: ['Dados', 'Baralho'],
+    summary: 'Treinou para a guerra e aprendeu disciplina, exercícios de combate e a importância de seu grupo.',
+    skills: ['Athletics', 'Intimidation'], tools: GAMING_SETS,
     kits: [kit(14, ['Spear', 'Shortbow', ['Arrow', 20], 'Gaming Set', "Healer's Kit", 'Quiver', "Traveler's Clothes"]), kit(50)] },
 };
 
-export const ORIGIN_FEATS = ['Alert', 'Magic Initiate (Cleric)', 'Magic Initiate (Druid)', 'Magic Initiate (Wizard)', 'Savage Attacker', 'Skilled', 'Tough'];
-export const STYLES = ['Archery', 'Blind Fighting', 'Defense', 'Dueling', 'Great Weapon Fighting', 'Interception',
-  'Protection', 'Thrown Weapon Fighting', 'Two-Weapon Fighting', 'Unarmed Fighting'];
 export const METAMAGIC = ['Acelerada', 'Agravada', 'Buscadora', 'Cautelosa', 'Distante', 'Duplicada', 'Persistente', 'Potencializada', 'Sutil', 'Transmutada'];
 export const SPELLS = Object.fromEntries(Object.entries(spellData).map(([name, [level, school, classes, components, range, duration, flags, label]]) =>
   [name, { name, label, summary: spellSummaries[name], level, school, classes, components, range, duration,
