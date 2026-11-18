@@ -157,6 +157,7 @@ function Magic({ details, play, spend, roll, damage, log, last, onEdit }) {
       const potent = level === 0 && ['cleric', 'cleric:cantrips', 'cleric:order'].includes(entry.id) && details.blessedStrike === 'Conjuração Poderosa';
       return <details className="dnd24-subcard" key={index}>
         <summary><b>{label}</b> · {level ? `${level}º círculo` : 'Truque'}{spell?.concentration ? ' · Concentração' : ''}{spell?.ritual ? ' · Ritual' : ''}</summary>
+        {spell?.summary && <p className="dnd24-spell-effect">{spell.summary}</p>}
         <p>{entry.source} · {ABILITIES[entry.ability]?.[0] ?? 'Conjuração'} · CD {8 + details.pb + mod} · Ataque {signedNumber(details.pb + mod)}</p>
         {beams > 1 && <p>{beams} raios · role ataque e dano para cada raio.</p>}
         {spell?.components && <p>{spell.components.split('').join(' / ')} · {spell.range} · {spell.duration}</p>}

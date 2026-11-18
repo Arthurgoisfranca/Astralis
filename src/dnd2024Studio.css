@@ -147,6 +147,7 @@
 .dnd24-spell-option>label{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .dnd24-spell-option>label small{margin-left:auto}
 .dnd24-spell-option details{margin-left:22px;font-size:11px}
+.dnd24-studio p.dnd24-spell-effect,.dnd24-spell-dialog p.dnd24-spell-effect{color:var(--text);font-size:13px;line-height:1.5}
 .dnd24-stage-issues,.dnd24-error,.dnd24-message{
   padding:8px 10px;border:1px solid #8c623c;background:#35271e;border-radius:6px;color:var(--pending)!important;
 }

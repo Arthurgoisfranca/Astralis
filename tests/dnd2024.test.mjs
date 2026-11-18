@@ -39,14 +39,16 @@ test('as 12 classes têm progressões até o nível 20 e as 48 subclasses do Liv
   assert.equal(SPELLS.Guidance.concentration, true);
 });
 
-test('as 391 magias têm dados de seleção e usam as chaves aceitas por fichas anteriores', () => {
+test('as 391 magias têm dados e resumos distintos e usam as chaves aceitas por fichas anteriores', () => {
   assert.equal(Object.keys(SPELLS).length, 391);
   assert.equal(new Set(Object.values(SPELLS).map(spell => spell.label)).size, 391);
   for (const spell of Object.values(SPELLS)) {
     assert.ok(spell.classes.length && spell.classes.every(id => Object.hasOwn(CLASSES, id)));
     assert.match(spell.components, /^[VSM]+$/);
     assert.ok(spell.range && spell.duration);
+    assert.ok(typeof spell.summary === 'string' && spell.summary.length >= 40 && spell.summary.length <= 150, spell.label);
   }
+  assert.equal(new Set(Object.values(SPELLS).map(spell => spell.summary)).size, 391);
   assert.equal(SPELLS.Bless.label, 'Bênção');
   assert.equal(SPELLS.Fireball.label, 'Bola de Fogo');
   assert.equal(SPELLS['Destruição Estrondosa'].level, 1);
