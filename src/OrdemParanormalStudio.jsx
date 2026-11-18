@@ -1,29 +1,29 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {rollExpression} from './domain/manualRules.mjs';
 import {
- OP2_STEPS,OP2_ARCHETYPES,OP2_ATTRIBUTES,OP2_SKILLS,OP2_DEFAULT_STATS,
+ OP2_STEPS,OP2_ARCHETYPES,OP2_ATTRIBUTES,OP2_SKILLS,OP2_DEFAULT_STATS,OP2_NOTEBOOK_FIELDS,OP2_STAT_LIMIT,
  sides,moveStep,cycleStep,parseTrack,parseSkillMap,writeSkillMap,getSkillStep,
  safeJsonRows,rollOrderPlaytest
 } from './domain/ordemPlaytestStudio.mjs';
+import ResourceEditor, { ImpetusBar } from './OrdemPlaytestEditor.jsx';
+import { DiceTray, InvestigationPanel, RelationsPanel } from './OrdemPlaytestPanels.jsx';
 import './ordemParanormalStudio.css';
 
 const titleAttribute={physical:'FÍSICO',mind:'MENTE',emotion:'EMOÇÃO'};
 const toInt=(v,min=0,max=9999)=>Math.max(min,Math.min(max,Math.trunc(Number(v)||0)));
 const val=(stats,key)=>stats[key]??OP2_DEFAULT_STATS[key]??'';
 const db=(sides)=>sides?`d${sides}`:'—';
-const BLANK_HABILITY={name:'',type:'Arquétipo',text:'',pd:0,pv:0};
-const BLANK_ITEM={name:'',type:'Geral',attackSkill:'Luta',damage:'',uses:'',notes:''};
 const storageKey=playerId=>`astralis:op2:draft:${String(playerId??'local').slice(0,72)}`;
 const lengthLimit=(input,max=500)=>String(input??'').slice(0,max).replaceAll('|','/');
 
 function DieSymbol({value,dim='md'}){
- const n=sides(value)||4;
+ const n=Number(value)===20?20:sides(value)||4;
  return <span className={`op2-die op2-die-${n} op2-die-${dim}`} aria-label={`d${n}`}><span>{n}</span></span>;
 }
 function Ornament({children,extra}){return <h3 className={'op2-ornament '+(extra||'')}>{children}</h3>}
 function StepControl({value,onChange,label}){
  const n=sides(value)||4;
- return <div className="op2-step-controls"><button type="button" aria-label={`Diminuir ${label}`} onClick={()=>onChange('d'+moveStep(n,-1))}>−</button><button type="button" className="op2-die-click" title={`Rolar ${label}`} aria-label={`Rolar ${label}, d${n}`} onClick={()=>onChange('roll')}><DieSymbol value={n} dim="lg"/></button><button type="button" aria-label={`Aumentar ${label}`} onClick={()=>onChange('d'+moveStep(n,1))}>+</button></div>;
+ return <div className="op2-step-controls"><button type="button" className="op2-die-click" title={`Rolar ${label}`} aria-label={`Rolar ${label}, d${n}`} onClick={()=>onChange('roll')}><DieSymbol value={n} dim="lg"/></button><button type="button" aria-label={`Diminuir ${label}`} onClick={()=>onChange('d'+moveStep(n,-1))}>−</button><button type="button" aria-label={`Aumentar ${label}`} onClick={()=>onChange('d'+moveStep(n,1))}>+</button></div>;
 }
 function Track({id,label,icon,stats,onChange,onRoll}){
  const field=id==='pv'?'PV':'PD',track=parseTrack(val(stats,id));
@@ -39,10 +39,13 @@ export default function OrdemParanormalStudio({player,form,setForm,stats,setStat
  const [panel,setPanel]=useState('Equipamentos'),[mobile,setMobile]=useState('agent'),[search,setSearch]=useState(''),[sort,setSort]=useState('name');
  const [modsShown,setModsShown]=useState(true),[bonusDice,setBonusDice]=useState([null,null]),[shift,setShift]=useState(0),[pavor,setPavor]=useState(false),[pavorStep,setPavorStep]=useState(6),[housePavorBonus,setHousePavorBonus]=useState(false);
  const [difficulty,setDifficulty]=useState('7'),[rolls,setRolls]=useState([]),[showHistory,setShowHistory]=useState(false),[toast,setToast]=useState(true),[error,setError]=useState('');
- const [editor,setEditor]=useState(null),[editorData,setEditorData]=useState(null),[importNotice,setImportNotice]=useState('');
+ const [editor,setEditor]=useState(null),[importNotice,setImportNotice]=useState('');
+ const [section,setSection]=useState('Agente'),[relationsEditing,setRelationsEditing]=useState(false),[diceOpen,setDiceOpen]=useState(false);
  const inputFile=useRef(null),dirty=useRef(false);
  const skills=parseSkillMap(stats.pericias),linked=parseSkillMap(stats.op2LinkedAttributes);
  const abilities=safeJsonRows(stats.op2Abilities),equipment=safeJsonRows(stats.op2Equipment);
+ const isAbilitiesPanel=panel==='Habilidades';
+ const currentRows=isAbilitiesPanel?abilities:equipment;
  const custom=safeJsonRows(stats.op2ExtraSkills).filter(row=>row?.name&&typeof row.name==='string');
  const skillRows=useMemo(()=>[...OP2_SKILLS.map(([name,attribute])=>({name,attribute})),...custom.map(row=>({name:row.name,attribute:OP2_ATTRIBUTES.some(([k])=>k===row.attribute)?row.attribute:'mind'}))],[stats.op2ExtraSkills]);
  const shownSkills=useMemo(()=>skillRows.filter(row=>row.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))).sort((a,b)=>sort==='step'?getSkillStep(skills[b.name])-getSkillStep(skills[a.name])||a.name.localeCompare(b.name,'pt-BR'):a.name.localeCompare(b.name,'pt-BR')),[skillRows,search,sort,stats.pericias]);
@@ -61,11 +64,15 @@ export default function OrdemParanormalStudio({player,form,setForm,stats,setStat
  function rollTrack(id,dt){const attr=id==='pv'?'physical':'emotion';roll({name:`Referência ${id==='pv'?'PV':'PD'} · confirme o teste com o Narrador`,attribute:attr,dt,pure:true});}
  function rowUpdate(kind,index,key,value){const all=kind==='Habilidades'?abilities:equipment;update(kind==='Habilidades'?'op2Abilities':'op2Equipment',JSON.stringify(all.map((row,i)=>i===index?{...row,[key]:value}:row)));}
  function rowRemove(kind,index){const all=kind==='Habilidades'?abilities:equipment;update(kind==='Habilidades'?'op2Abilities':'op2Equipment',JSON.stringify(all.filter((_,i)=>i!==index)));}
- function saveEditor(){
-  const key=panel==='Habilidades'?'op2Abilities':'op2Equipment',all=panel==='Habilidades'?abilities:equipment;
-  if(!String(editorData?.name||'').trim()){setError('Informe um nome.');return;}
-  const clean=Object.fromEntries(Object.entries(editorData).map(([k,v])=>[k,lengthLimit(v,k==='text'?1600:300)]));
-  update(key,JSON.stringify([...all,clean]));setEditor(null);setEditorData(null);setError('');
+ function saveEditor(row){
+  const isAbility=editor.kind==='Habilidades';
+  const all=isAbility?abilities:equipment;
+  const rows=editor.index===null?[...all,row]:all.map((item,index)=>index===editor.index?row:item);
+  const value=JSON.stringify(rows);
+  if(value.length>OP2_STAT_LIMIT) return 'A lista atingiu o limite de salvamento. Reduza a descrição ou remova um registro.';
+  update(isAbility?'op2Abilities':'op2Equipment',value);
+  setEditor(null);
+  setError('');
  }
  function addCustom(){const name=window.prompt('Nome da nova Aptidão / Ofício (sem duplicar outra perícia):');if(!name)return;const cleaned=lengthLimit(name.trim(),65);if(!cleaned)return;if(skillRows.some(row=>row.name.toLocaleLowerCase('pt-BR')===cleaned.toLocaleLowerCase('pt-BR'))){setError('Já existe uma perícia com esse nome.');return;}update('op2ExtraSkills',JSON.stringify([...custom,{name:cleaned,attribute:'mind'}]));}
  function removeCustom(name){update('op2ExtraSkills',JSON.stringify(custom.filter(x=>x.name!==name)));const next={...skills};delete next[name];update('pericias',writeSkillMap(next));}
@@ -76,11 +83,67 @@ export default function OrdemParanormalStudio({player,form,setForm,stats,setStat
  function equipmentDamage(item){try{if(!item.damage)throw new Error('Cadastre a expressão de dano conforme o livro/ficha.');const result=rollExpression(item.damage);addLog({name:`Dano · ${item.name}`,text:`${item.damage} → ${result.dice.join(' + ')} ${result.modifier?`(${result.modifier>0?'+':''}${result.modifier})`:''} = ${result.total}`,result:null});}catch(e){setError(e.message);}}
  function equipmentAttack(item){const row=skillRows.find(r=>r.name.toLocaleLowerCase('pt-BR')===String(item.attackSkill||'Luta').toLocaleLowerCase('pt-BR'));if(row)rollSkill(row,`Ataque: ${item.name} · ${row.name}`);else setError('Perícia de ataque não encontrada na ficha.');}
  function exportJson(){const payload={format:'astralis-op2-sheet',version:1,name:form.name,classLevel:form.classLevel,appearance:form.appearance,notes:form.notes,inventory:form.inventory,stats};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`ordem-2-${(form.name||'agente').replace(/[^\w-]/g,'_').slice(0,45)}.json`;a.click();URL.revokeObjectURL(url);}
- function importJson(file){if(!file)return;if(file.size>500000){setError('O arquivo JSON deve ter menos de 500 KB.');return;}const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(data?.format!=='astralis-op2-sheet'||data?.version!==1||typeof data.stats!=='object'||Array.isArray(data.stats)||data.stats===null)throw new Error('Formato de ficha Ordem 2 inválido.');const allowed=new Set([...Object.keys(OP2_DEFAULT_STATS),'pericias','op2LinkedAttributes','op2Abilities','op2Equipment','op2ExtraSkills','relationships','relacoes','conditions','trauma','levelMarks','trainingNotes','inventory','space','appearance']);const cleaned={};for(const [k,v] of Object.entries(data.stats))if(allowed.has(k)&&typeof v==='string')cleaned[k]=v.slice(0,20000);setForm(old=>({...old,name:lengthLimit(data.name||old.name,120),classLevel:lengthLimit(data.classLevel||old.classLevel,120),appearance:lengthLimit(data.appearance??old.appearance,20000),notes:lengthLimit(data.notes??old.notes,20000),inventory:lengthLimit(data.inventory??old.inventory,20000),stats:{...old.stats,...cleaned}}));setImportNotice('Ficha importada como rascunho. Clique em Salvar ficha para sincronizar.');setError('');}catch(e){setError(e.message);}};reader.readAsText(file);}
+ function importJson(file) {
+  if(!file)return;
+  if(file.size>500000){setError('O arquivo JSON deve ter menos de 500 KB.');return;}
+  const reader=new FileReader();
+  reader.onload=()=>{
+   try {
+    const data=JSON.parse(reader.result);
+    if(data?.format!=='astralis-op2-sheet'||data?.version!==1||typeof data.stats!=='object'||Array.isArray(data.stats)||data.stats===null) {
+     throw new Error('Formato de ficha Ordem 2 inválido.');
+    }
+    const allowed=new Set([
+     ...Object.keys(OP2_DEFAULT_STATS),...Object.keys(OP2_NOTEBOOK_FIELDS),
+     'pericias','op2LinkedAttributes','op2Abilities','op2Equipment','op2ExtraSkills','relationships','relacoes',
+     'conditions','trauma','levelMarks','trainingNotes','inventory','space','appearance',
+    ]);
+    const cleaned={};
+    for(const [key,value] of Object.entries(data.stats)) {
+     if(!allowed.has(key)||typeof value!=='string')continue;
+     if(Object.hasOwn(OP2_NOTEBOOK_FIELDS,key)&&value.trim().length>OP2_STAT_LIMIT) {
+      throw new Error(`${OP2_NOTEBOOK_FIELDS[key]} excede o limite desta ficha.`);
+     }
+     cleaned[key]=value.slice(0,20000);
+    }
+    setForm(old=>({...old,name:lengthLimit(data.name||old.name,120),classLevel:lengthLimit(data.classLevel||old.classLevel,120),
+     appearance:lengthLimit(data.appearance??old.appearance,20000),notes:lengthLimit(data.notes??old.notes,20000),
+     inventory:lengthLimit(data.inventory??old.inventory,20000),stats:{...old.stats,...cleaned}}));
+    setImportNotice('Ficha importada como rascunho. Clique em Salvar ficha para sincronizar.');
+    setError('');
+   } catch(error) {setError(error.message);}
+  };
+  reader.readAsText(file);
+ }
  function restoreDraft(){try{const raw=localStorage.getItem(storageKey(player?.id));if(!raw){setError('Nenhum rascunho local encontrado.');return;}const saved=JSON.parse(raw);if(!saved.stats||typeof saved.stats!=='object')throw Error('Rascunho inválido.');setForm(old=>({...old,name:saved.name||old.name,classLevel:saved.classLevel??old.classLevel,appearance:saved.appearance??old.appearance,notes:saved.notes??old.notes,inventory:saved.inventory??old.inventory,stats:{...old.stats,...saved.stats}}));setImportNotice('Rascunho restaurado; confirme em Salvar ficha.');}catch(e){setError(e.message);}}
  function resetMods(){setBonusDice([null,null]);setShift(0);setPavor(false);setHousePavorBonus(false);setError('');}
  return <div className="op2-view" data-archetype={archetype.toLowerCase()} data-mobile-section={mobile}>
-  <div className="op2-topbar"><span className="op2-brand">ORDEM PARANORMAL <b>II</b> <small>PLAYTEST BETA</small></span><div className="op2-toolbar"><button type="button" onClick={resetMods}>Zerar modificadores</button><button type="button" onClick={restoreDraft}>Restaurar rascunho</button><button type="button" onClick={exportJson}>Exportar JSON</button><button type="button" onClick={()=>inputFile.current?.click()}>Importar JSON</button><input ref={inputFile} type="file" accept="application/json,.json" hidden onChange={e=>{importJson(e.target.files?.[0]);e.target.value='';}}/></div></div>
+  <div className="op2-topbar">
+   <span className="op2-brand">ORDEM PARANORMAL <b>II</b></span>
+   <nav className="op2-sections" aria-label="Seções de Ordem Paranormal II">
+    {['Agente','Investigação','Relações'].map(item=><button key={item} type="button"
+     aria-pressed={section===item} onClick={()=>setSection(item)}>{item}</button>)}
+   </nav>
+   <div className="op2-toolbar">
+    {section==='Relações'&&<button type="button" aria-pressed={relationsEditing}
+     onClick={()=>setRelationsEditing(value=>!value)}>{relationsEditing?'Concluir edição':'Editar relações'}</button>}
+    <div className="op2-dice-anchor">
+     <button type="button" aria-expanded={diceOpen} onClick={()=>setDiceOpen(value=>!value)}>Dados</button>
+     {diceOpen&&<DiceTray DieSymbol={DieSymbol} onRoll={addLog}/>}
+    </div>
+    <details className="op2-options">
+     <summary>Opções</summary>
+     <div>
+      <button type="button" onClick={resetMods}>Zerar modificadores</button>
+      <button type="button" onClick={restoreDraft}>Restaurar rascunho</button>
+      <button type="button" onClick={exportJson}>Exportar JSON</button>
+      <button type="button" onClick={()=>inputFile.current?.click()}>Importar JSON</button>
+      <input ref={inputFile} type="file" accept="application/json,.json" hidden onChange={e=>{importJson(e.target.files?.[0]);e.target.value='';}}/>
+     </div>
+    </details>
+   </div>
+  </div>
+  <div hidden={section!=='Agente'}>
   <nav className="op2-mobile-nav" aria-label="Painéis da ficha"><button type="button" aria-current={mobile==='agent'?'page':undefined} onClick={()=>setMobile('agent')}>Agente</button><button type="button" aria-current={mobile==='skills'?'page':undefined} onClick={()=>setMobile('skills')}>Perícias</button><button type="button" aria-current={mobile==='management'?'page':undefined} onClick={()=>setMobile('management')}>Habilidades e itens</button></nav>
   <div className="op2-columns">
    <section className="op2-agent-col" aria-label="Agente e atributos">
@@ -98,10 +161,52 @@ export default function OrdemParanormalStudio({player,form,setForm,stats,setStat
     <div className="op2-skill-table" role="list">{shownSkills.map(row=>{const attr=skillAttr(row),skill=currentSkill(row),dice=sides(val(stats,attr))||6;return <div className="op2-skill" role="listitem" key={row.name}><button type="button" className="op2-skill-name" title={`Rolar ${row.name}`} onClick={()=>rollSkill(row)}>{row.name}</button><button type="button" className="op2-skill-step" aria-label={`Aumentar dado da perícia ${row.name}`} title="Clique: próximo passo. Clique direito: passo anterior" onClick={()=>changeSkill(row,cycleStep(skill,1))} onContextMenu={e=>{e.preventDefault();changeSkill(row,cycleStep(skill,-1));}}><DieSymbol value={skill} dim="sm"/></button><span className="op2-plus">+</span><span className="op2-skill-attribute"><DieSymbol value={dice} dim="sm"/></span><select aria-label={`Atributo de ${row.name}`} value={attr} onChange={e=>changeLinked(row,e.target.value)}>{OP2_ATTRIBUTES.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>{custom.some(c=>c.name===row.name)&&<button type="button" className="op2-remove" title="Remover perícia personalizada" aria-label={`Remover ${row.name}`} onClick={()=>removeCustom(row.name)}>×</button>}</div>})}</div><button type="button" className="op2-add-skill" onClick={addCustom}>+ Nova Aptidão / Ofício</button>
     <small className="op2-info">O Pavor oficial anula dados menores que seu resultado; se todos forem anulados, há falha crítica. A soma do Pavor como bônus é uma variante opcional, não oficial.</small>
    </section>
-   <section className="op2-management-col" aria-label="Habilidades e equipamentos"><div className="op2-panel-tabs"><button type="button" className={panel==='Habilidades'?'active':''} onClick={()=>setPanel('Habilidades')}>Habilidades</button><button type="button" className={panel==='Equipamentos'?'active':''} onClick={()=>setPanel('Equipamentos')}>Equipamentos</button><button type="button" aria-label={`Adicionar ${panel.toLowerCase()}`} className="op2-panel-add" onClick={()=>{setEditor(true);setEditorData(panel==='Habilidades'?{...BLANK_HABILITY}:{...BLANK_ITEM});}}>+</button></div><div className="op2-panel-scroll">{(panel==='Habilidades'?abilities:equipment).length===0?<p className="op2-empty">Adicione novas {panel.toLowerCase()} para vê-las aqui.</p>:(panel==='Habilidades'?abilities:equipment).map((row,i)=><article className="op2-card" key={i}><div className="op2-card-head"><h4>{row.name||'Sem nome'}</h4><button type="button" aria-label={`Remover ${row.name}`} onClick={()=>rowRemove(panel,i)}>×</button></div><small>{row.type||'Sem tipo'}</small>{panel==='Habilidades'?<><p>{row.text}</p><button type="button" onClick={()=>useAbility(row)}>Usar · {toInt(row.pd)} PD / {toInt(row.pv)} PV</button></>:<><p>{row.notes}</p>{row.type==='Arma'&&<div className="op2-card-actions"><button type="button" onClick={()=>equipmentAttack(row)}>⚔ Rolar ataque</button><button type="button" onClick={()=>equipmentDamage(row)}>◈ Rolar dano</button></div>}{row.uses!==''&&<label>Usos/Munição <input type="number" min="0" value={row.uses??0} onChange={e=>rowUpdate(panel,i,'uses',String(toInt(e.target.value)))}/></label>}</>}</article>)}</div></section>
+   <section className="op2-management-col" aria-label="Habilidades e equipamentos">
+    <div className="op2-panel-tabs">
+     <button type="button" aria-pressed={isAbilitiesPanel} className={isAbilitiesPanel?'active':''} onClick={()=>setPanel('Habilidades')}>Habilidades</button>
+     <button type="button" aria-pressed={!isAbilitiesPanel} className={!isAbilitiesPanel?'active':''} onClick={()=>setPanel('Equipamentos')}>Equipamentos</button>
+     <button type="button" aria-label={isAbilitiesPanel?'Adicionar habilidade':'Adicionar equipamento'} className="op2-panel-add"
+      onClick={()=>setEditor({kind:panel,index:null})}>+</button>
+    </div>
+    <div className={`op2-panel-scroll${currentRows.length?'':' op2-panel-empty'}`}>
+     {currentRows.length===0&&<p className="op2-empty">{isAbilitiesPanel?'Adicione uma habilidade.':'Adicione um equipamento.'}</p>}
+     {currentRows.map((row,index)=>{
+      const maxUses=Number(row.maxUses)||null;
+      return <article className="op2-card" key={index}>
+       <div className="op2-card-head">
+        <h4>{row.name||'Sem nome'}</h4>
+        <div><button type="button" onClick={()=>setEditor({kind:panel,index})} aria-label={`Editar ${row.name}`}>Editar</button>
+         <button type="button" aria-label={`Remover ${row.name}`} onClick={()=>rowRemove(panel,index)}>×</button></div>
+       </div>
+       <small>{row.type}{row.source&&` · ${row.source}`}</small>
+       {isAbilitiesPanel?<><p>{row.text}</p>
+        <ImpetusBar row={row} onChange={value=>rowUpdate(panel,index,'impetus',value)}/>
+        <button type="button" onClick={()=>useAbility(row)}>Usar · {toInt(row.pd)} PD / {toInt(row.pv)} PV</button>
+       </>:<>
+        <p>{row.notes}</p>
+        {row.type==='Arma'&&<div className="op2-card-actions">
+         <button type="button" onClick={()=>equipmentAttack(row)}>Rolar ataque</button>
+         <button type="button" onClick={()=>equipmentDamage(row)}>Rolar dano</button>
+        </div>}
+        {row.uses!=null&&row.uses!==''&&<label>Usos restantes
+         <input type="number" min="0" max={maxUses??9999} value={row.uses}
+          onChange={event=>rowUpdate(panel,index,'uses',String(toInt(event.target.value,0,maxUses??9999)))}/>
+         {maxUses&&<span>de {maxUses}</span>}
+        </label>}
+       </>}
+      </article>;
+     })}
+    </div>
+   </section>
   </div>
+  </div>
+  <div hidden={section!=='Investigação'}><InvestigationPanel stats={stats} notes={form.notes} setStat={setStat} onError={setError}/></div>
+  <div hidden={section!=='Relações'}><RelationsPanel stats={stats} editing={relationsEditing} setStat={setStat}
+   onError={setError} onEdit={()=>setRelationsEditing(true)}/></div>
   <div className="op2-log-wrap"><button type="button" className="op2-history-toggle" onClick={()=>{setShowHistory(!showHistory);setToast(false);}} aria-expanded={showHistory}>◈ Dados · histórico {rolls.length}</button>{showHistory&&<div className="op2-log-history" role="region" aria-label="Histórico de rolagens"><div className="op2-log-head"><b>Últimas 20 rolagens</b><button type="button" onClick={()=>setRolls([])}>Limpar</button></div>{rolls.length===0?<p>Nenhum teste nesta sessão.</p>:rolls.map(entry=><div className="op2-log-item" key={entry.id}><small>{entry.at} · {entry.name}</small><b>{entry.result?`${entry.result.total} — ${entry.result.title}`:'Ação registrada'}</b><p>{entry.result?.formula||entry.text}</p></div>)}</div>}{toast&&rolls[0]&&<div className="op2-toast" role="status"><button type="button" aria-label="Fechar resultado" onClick={()=>setToast(false)}>×</button><b>{form.name||'Novo Agente'} · {rolls[0].name}</b>{rolls[0].result?<><strong>{rolls[0].result.total}</strong><span>{rolls[0].result.title}</span><small>{rolls[0].result.formula}</small></>:<p>{rolls[0].text}</p>}</div>}</div>
   {importNotice&&<p role="status" className="op2-status">{importNotice}</p>}{error&&<p role="alert" className="op2-error">{error}<button type="button" onClick={()=>setError('')}>Fechar</button></p>}
-  {editor&&<div className="op2-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setEditor(null);}}><section className="op2-dialog" role="dialog" aria-modal="true" aria-label={`Adicionar ${panel.toLowerCase()}`}><header><h3>Novo {panel==='Habilidades'?'recurso':'equipamento'}</h3><button type="button" aria-label="Fechar formulário" onClick={()=>setEditor(null)}>×</button></header><label>Nome<input autoFocus value={editorData?.name||''} onChange={e=>setEditorData(old=>({...old,name:e.target.value}))}/></label><label>Tipo<select value={editorData?.type||''} onChange={e=>setEditorData(old=>({...old,type:e.target.value}))}>{(panel==='Habilidades'?['Arquétipo','Ocupação','Bruxaria','Outro']:['Arma','Proteção','Geral','Catalisador']).map(v=><option key={v}>{v}</option>)}</select></label>{panel==='Habilidades'?<><label>Descrição<textarea rows="3" value={editorData?.text||''} onChange={e=>setEditorData(old=>({...old,text:e.target.value}))}/></label><label>Custo de PD registrado<input type="number" min="0" max="9999" value={editorData?.pd??0} onChange={e=>setEditorData(old=>({...old,pd:e.target.value}))}/></label><label>Custo de PV registrado<input type="number" min="0" max="9999" value={editorData?.pv??0} onChange={e=>setEditorData(old=>({...old,pv:e.target.value}))}/></label></>:<><label>Perícia para ataque<select value={editorData?.attackSkill||'Luta'} onChange={e=>setEditorData(old=>({...old,attackSkill:e.target.value}))}><option>Luta</option><option>Pontaria</option></select></label><label>Dano conforme manual / ficha (ex.: 1d8+2)<input value={editorData?.damage||''} onChange={e=>setEditorData(old=>({...old,damage:e.target.value}))}/></label><label>Usos/Munição<input type="number" min="0" value={editorData?.uses??''} onChange={e=>setEditorData(old=>({...old,uses:e.target.value}))}/></label><label>Observações<textarea rows="2" value={editorData?.notes||''} onChange={e=>setEditorData(old=>({...old,notes:e.target.value}))}/></label></>}<div className="op2-dialog-actions"><button type="button" onClick={()=>setEditor(null)}>Cancelar</button><button type="button" onClick={saveEditor}>Adicionar à ficha</button></div></section></div>}
+  {editor&&<ResourceEditor kind={editor.kind}
+   initial={editor.index===null?null:(editor.kind==='Habilidades'?abilities:equipment)[editor.index]}
+   onSave={saveEditor} onClose={()=>setEditor(null)}/>}
  </div>;
 }

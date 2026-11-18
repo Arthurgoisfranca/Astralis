@@ -20,6 +20,15 @@ export const OP2_DEFAULT_STATS = Object.freeze({
  archetype:'Executor',role:'Ocupação',nivel:'4',physical:'d6',mind:'d8',emotion:'d8',
  pv:'10/10',pd:'10/10',op2DtPv:'7',op2DtPd:'7',
 });
+export const OP2_STAT_LIMIT = 2400;
+export const OP2_NOTE_PAGES = Object.freeze([1, 2, 3, 4]);
+export const OP2_NOTEBOOK_FIELDS = Object.freeze({
+ op2Relations: 'Relações',
+ ...Object.fromEntries(OP2_NOTE_PAGES.flatMap(page => [
+  [`op2Points${page}`, `Pontos de interesse · página ${page}`],
+  [`op2Notes${page}`, `Anotações · página ${page}`],
+ ])),
+});
 export const sides=value=>{
  const m=String(value??'').trim().match(/^d?(4|6|8|10|12)$/i);
  return m ? Number(m[1]) : null;
@@ -65,10 +74,11 @@ export function prepareOP2Stats(stats) {
   op2ExtraSkills: 'Aptidões e ofícios personalizados',
   op2Abilities: 'Habilidades',
   op2Equipment: 'Equipamentos',
+  ...OP2_NOTEBOOK_FIELDS,
  };
  // cleanCharacter limits each stat to 2400 characters.
  for (const [key, label] of Object.entries(labels)) {
-  if (String(prepared[key] ?? '').trim().length > 2400) {
+  if (String(prepared[key] ?? '').trim().length > OP2_STAT_LIMIT) {
    throw new Error(`${label}: a lista excede o limite de salvamento. Reduza o conteúdo e tente novamente.`);
   }
  }

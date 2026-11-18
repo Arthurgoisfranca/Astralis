@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
- OP2_ARCHETYPES,OP2_ATTRIBUTES,OP2_SKILLS,OP2_STEPS,OP2_DEFAULT_STATS,
+ OP2_ARCHETYPES,OP2_ATTRIBUTES,OP2_SKILLS,OP2_STEPS,OP2_DEFAULT_STATS,OP2_NOTEBOOK_FIELDS,OP2_STAT_LIMIT,
  moveStep,cycleStep,parseTrack,parseSkillMap,writeSkillMap,getSkillStep,
  safeJsonRows,rollOrderPlaytest,prepareOP2Stats
 } from '../src/domain/ordemPlaytestStudio.mjs';
@@ -49,6 +49,19 @@ test('salvamento impede que o servidor corte as listas JSON',()=>{
  assert.throws(() => prepareOP2Stats({ op2Equipment: rows }), /Equipamentos.*limite/);
  const accepted = JSON.stringify([{ name: 'Recurso', text: 'a'.repeat(200) }]);
  assert.equal(prepareOP2Stats({ op2Abilities: accepted }).op2Abilities, accepted);
+});
+test('anotações, pontos e relações preservam os dados e os limites de cada campo',()=>{
+ const stats = {
+  op2Notes1: 'Bilhete encontrado no escritório.',
+  op2Notes4: 'Conferir o selo.',
+  op2Points2: JSON.stringify([{ name: 'Escritório', marks: [true, false, false] }]),
+  op2Relations: JSON.stringify([{ name: 'Contato', photo: '', marks: [false, true, false] }]),
+  relacoes: 'Registro antigo',
+ };
+ assert.deepEqual({ ...prepareOP2Stats(stats), pericias: undefined }, { ...stats, pericias: undefined });
+ assert.equal(Object.keys(OP2_NOTEBOOK_FIELDS).length, 9);
+ assert.throws(() => prepareOP2Stats({ op2Notes4: 'a'.repeat(OP2_STAT_LIMIT + 1) }), /Anotações · página 4/);
+ assert.throws(() => prepareOP2Stats({ op2Relations: 'a'.repeat(OP2_STAT_LIMIT + 1) }), /Relações/);
 });
 test('modificador aumenta passos e inclui até dois dados de bônus',()=>{
  const r=rollOrderPlaytest({skillDie:4,attributeDie:8,stepShift:2,extraDice:[6,12],difficulty:11},diceRng([4,8],[5,8],[6,6],[8,12]));
