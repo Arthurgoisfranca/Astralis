@@ -3,4 +3,4 @@ dist/
 data/
 .env
 .env.*
-!.env.example
+semantic-review/

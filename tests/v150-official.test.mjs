@@ -66,6 +66,8 @@ test('Astralis visual identity and PWA; protected working audio untouched',()=>{
 test('No secrets or generated directories shipped',async()=>{
  const {execFileSync}=await import('node:child_process');
  const tracked=execFileSync('git',['ls-files'],{cwd:root,encoding:'utf8'}).split(/\r?\n/);
- assert.ok(!tracked.some(file=>file==='.env'||file.startsWith('dist/')||file.startsWith('node_modules/')));
- assert.doesNotMatch(read('.env.example'),/sb_secret_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_-]{30,}/);
+ assert.ok(!tracked.some(file=>/(^|\/)\.env(\.|$)/.test(file)||file.startsWith('dist/')||file.startsWith('node_modules/')));
+ let leaked='';
+ try{leaked=execFileSync('git',['grep','-lIE','sb_secret_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_-]{30,}','--','.',':!tests/'],{cwd:root,encoding:'utf8'});}catch(error){if(error.status!==1)throw error;}
+ assert.equal(leaked.trim(),'','arquivos versionados com chave');
 });

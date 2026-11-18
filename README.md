@@ -61,6 +61,23 @@ O servidor Node entrega o front-end compilado e também atende a API e as conex�
 
 Ordem Paranormal 2, D&D 5.5E (2024), D&D 5E, Call of Cthulhu, Vampire: The Masquerade 5E / 6E, Daggerheart, Triangle Agency, Sacramento e Assimilação RPG.
 
+## Variáveis de ambiente
+
+Crie um arquivo `.env` na raiz para rodar localmente. Ele e qualquer `.env.*` são ignorados pelo git. Em produção, defina as variáveis no painel do Render.
+
+| Variável | Onde | Uso |
+|---|---|---|
+| `SUPABASE_URL` | servidor | URL do projeto Supabase |
+| `SUPABASE_SECRET_KEY` | servidor | Chave secreta (service-role). Nunca no front-end nem no git |
+| `CORS_ORIGIN` | servidor | Origens permitidas, separadas por vírgula |
+| `DATA_DIR` | servidor | Pasta do SQLite local e dos blocos de upload (padrão `data/`) |
+| `PORT` | servidor | Porta HTTP (padrão 3001) |
+| `VITE_SUPABASE_URL` | build do front-end | URL do projeto Supabase |
+| `VITE_SUPABASE_ANON_KEY` | build do front-end | Chave pública (publishable) |
+| `VITE_API_URL`, `VITE_SOCKET_URL` | build do front-end | Só quando o front-end fica em outro domínio |
+
+Sem `SUPABASE_URL` e `SUPABASE_SECRET_KEY`, o servidor usa SQLite e disco local.
+
 ## Segurança e dados
 
 - Nunca versione o arquivo `.env` nem credenciais de serviço.
