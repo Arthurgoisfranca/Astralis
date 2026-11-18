@@ -1,3 +1,4 @@
+import { OP2_DEFAULT_STATS } from "./domain/ordemPlaytestStudio.mjs";
 import { VAMPIRE_ALPHA2, ALPHA_ATTRIBUTES, ALPHA_SKILLS, ALPHA_CLANS, ALPHA_GENERATIONS, alphaResources } from "./domain/vampireAlpha2.mjs";
 const f=(key,label,kind="text",extra={})=>({key,label,kind,...extra});
 const s=(tab,title,fields)=>({tab,title,fields});
@@ -89,6 +90,7 @@ export const SYSTEM_SHEETS={
 };
 export function sheetDefaults(system,current={}) {
  const stats={...current};
+ if(system==="Ordem Paranormal 2")for(const [key,value] of Object.entries(OP2_DEFAULT_STATS))if(stats[key]===undefined)stats[key]=value;
  if(system===VAMPIRE_ALPHA2){for(const [key] of ALPHA_ATTRIBUTES)if(stats[key]===undefined)stats[key]="1";if(stats.generationCategory===undefined)stats.generationCategory="Neonate";if(stats.humanity===undefined)stats.humanity="6";const r=alphaResources(stats);for(const key of ["health","vitae","willpower"])if(stats[key]===undefined)stats[key]=String(r[key]);}
  if(system.startsWith("D&D")){for(const [key] of abil)if(stats[key]===undefined)stats[key]="10";if(stats.proficiencyBonus===undefined)stats.proficiencyBonus="2";if(stats.level===undefined)stats.level="1";if(stats.speed===undefined)stats.speed="30";}
  
