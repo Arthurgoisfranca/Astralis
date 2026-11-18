@@ -87,9 +87,16 @@ export function Home({ inviteId, setInviteId, rooms, onCreate, onJoin, onResume,
 
 export function Lobby({ room, presence, isGM, inviteUrl, send, identity, currentAvatar }) {
   const [form, setForm] = useState(room.campaign); const [copied, setCopied] = useState(false);
+  // Enquanto o Mestre tem alterações não salvas, as atualizações da mesa não sobrescrevem o formulário.
+  const [dirty, setDirty] = useState(false), [savingCampaign, setSavingCampaign] = useState(false);
   const statusNames = { completed: "Concluída", active: "Em andamento", notStarted: "Não iniciada" };
-  useEffect(() => setForm(room.campaign), [room.campaign]);
-  const update = key => event => setForm(old => ({ ...old, [key]: event.target.value }));
+  useEffect(() => { if (!dirty) setForm(room.campaign); }, [room.campaign, dirty]);
+  const update = key => event => { setDirty(true); setForm(old => ({ ...old, [key]: event.target.value })); };
+  async function saveCampaign(event) {
+    event.preventDefault(); setSavingCampaign(true);
+    try { const result = await send("campaign:update", form); if (result?.ok) setDirty(false); }
+    finally { setSavingCampaign(false); }
+  }
   async function copyInvite() {
     try { await navigator.clipboard.writeText(inviteUrl); }
     catch (_) {
@@ -110,7 +117,7 @@ export function Lobby({ room, presence, isGM, inviteUrl, send, identity, current
         {isGM && <div className="invite-box"><small>LINK DE CONVITE</small><div><code>{inviteUrl}</code><button className="button quiet" onClick={copyInvite}>{copied ? "Copiado" : "Copiar"}</button></div></div>}
       </section>
       <div className="lobby-right">
-        {isGM && <section className="surface campaign-settings"><div className="section-eyebrow">DADOS DA CAMPANHA</div><form onSubmit={event => { event.preventDefault(); send("campaign:update", form); }} className="compact-form campaign-edit">
+        {isGM && <section className="surface campaign-settings"><div className="section-eyebrow">DADOS DA CAMPANHA</div><form onSubmit={saveCampaign} className="compact-form campaign-edit">
           <label>Título<input value={form.title || ""} onChange={update("title")}/></label><label>Sistema<select value={form.system || ""} onChange={update("system")}><option value="">Selecione o sistema</option>{SYSTEMS.map(system => <option key={system} value={system}>{systemLabel(system)}</option>)}</select></label><label>Nome do Mestre<input value={form.gmName || ""} onChange={update("gmName")}/></label><label>Status<select value={form.status || "notStarted"} onChange={update("status")}><option value="notStarted">Não iniciada</option><option value="active">Em andamento</option><option value="completed">Concluída</option></select></label>
           <details className="edit-more"><summary>Editar os outros dados</summary><div className="campaign-extra-grid">
             <label>Duração<select value={form.duration || ""} onChange={update("duration")}><option>One-shot</option><option>Campanha curta</option><option>Campanha longa</option></select></label><label>Estilo<input value={form.style || ""} onChange={update("style")}/></label>
@@ -118,7 +125,7 @@ export function Lobby({ room, presence, isGM, inviteUrl, send, identity, current
             <label>Dia habitual<input value={form.usualDay || ""} onChange={update("usualDay")}/></label><label>Data<input type="date" value={form.date || ""} onChange={update("date")}/></label><label>Horário<input type="time" value={form.time || ""} onChange={update("time")}/></label><label>Local<input value={form.location || ""} onChange={update("location")}/></label>
             <label>Classificação<input value={form.ageRating || ""} onChange={update("ageRating")}/></label><label>Requisitos<input value={form.requirements || ""} onChange={update("requirements")}/></label>
             <label className="full-field">Gatilhos<input value={form.triggers || ""} onChange={update("triggers")}/></label><label className="full-field">Resumo<textarea value={form.summary || ""} onChange={update("summary")}/></label><label className="full-field">Observações<textarea value={form.observations || ""} onChange={update("observations")}/></label>
-          </div></details><button className="button secondary">Atualizar campanha</button></form></section>}
+          </div></details><div className="card-actions"><button className="button secondary" disabled={savingCampaign}>{savingCampaign ? "Salvando…" : "Atualizar campanha"}</button>{dirty && <button type="button" className="button quiet" onClick={() => setDirty(false)}>Descartar alterações</button>}</div>{dirty && <small role="status">Alterações não salvas.</small>}</form></section>}
         {isGM ? <section className="surface modules-panel"><div className="section-eyebrow">CONTROLE DE VISIBILIDADE</div><h2>Módulos da mesa</h2><p>Desative módulos para removê-los da navegação dos jogadores.</p><div className="module-toggles">{MODULES.map(([key, label]) => <label key={key} className="toggle-row"><span>{label}</span><input type="checkbox" checked={Boolean(room.modules[key])} onChange={event => send("module:set", { key, enabled: event.target.checked })}/></label>)}</div></section> : <section className="surface player-welcome"><div className="section-eyebrow">ACESSO DE JOGADOR</div><h2>Ficha e materiais da mesa</h2><p>Edite sua própria ficha, consulte handouts liberados e acompanhe as atualizações.</p></section>}
       </div>
     </div>
