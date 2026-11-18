@@ -9,6 +9,10 @@ const { createClient } = require("@supabase/supabase-js");
 const { Server } = require("socket.io");
 const { RoomRepository } = require("./server/repositories/roomRepository");
 const { CommunityLibraryRepository } = require("./server/repositories/communityLibraryRepository");
+const { contentMatchesMime, extensionFor, safeStoragePath, uploadAllowed } = require("./server/fileSecurity");
+let dice = null;
+const diceReady = import("./src/domain/serverDice.mjs").then(module => { dice = module; });
+const secureRandom = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
 
 const port = Number(process.env.PORT || 3001);
 const dataDir = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -37,6 +41,14 @@ const allowedOrigins = (process.env.CORS_ORIGIN || "").split(",").map(origin => 
 app.use(express.json({ limit: "35mb" }));
 const server = http.createServer(app);
 const actionQueues = new Map();
+/** Executa tarefas de leitura-alteração-gravação de uma mesa uma de cada vez. */
+function enqueueRoom(roomId, task) {
+  const previous = actionQueues.get(roomId) || Promise.resolve();
+  const pending = previous.catch(() => {}).then(task);
+  actionQueues.set(roomId, pending);
+  pending.catch(() => {}).finally(() => { if (actionQueues.get(roomId) === pending) actionQueues.delete(roomId); });
+  return pending;
+}
 const audioChannels = new Map();
 function publishAudio(roomId, music) {
   if(!supabase)return;
@@ -177,7 +189,13 @@ function applyAction(room, socket, action) {
     case "system:consultation:delete": requireGM(socket); state.systemGuide.consultations = state.systemGuide.consultations.filter(row=>row.id!==payload.id); break;
     case "system:consultation:toggle": requireGM(socket); {const row=state.systemGuide.consultations.find(item=>item.id===payload.id); if(row) row.active=Boolean(payload.active);} break; case "gm:shield:update": requireGM(socket); state.gmShield.notes = text(payload.value, 30000); break;
     case "gm:tracker:update": { requireGM(socket); const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }, key=payload.key==="fear"?"fear":"chaos", limit=key==="fear"?12:999; tracker[key]=Math.min(limit,Math.max(0,Math.trunc(Number(payload.value)||0))); break; }
-    case "dice:record": { const tracker=state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] }; let summary="",system=text(payload.system,40),actor=text(payload.actor,80); if(system!==state.campaign.system) throw new Error("A rolagem não corresponde ao sistema desta mesa."); if(system==="Triangle Agency"){ const dice=Array.isArray(payload.dice)?payload.dice.slice(0,6).map(Number):[]; if(dice.length!==6||dice.some(value=>!Number.isInteger(value)||value<1||value>4)) throw new Error("A rolagem de Triangle Agency precisa ter seis d4."); const threes=dice.filter(value=>value===3).length,triscendence=threes===3,chaos=triscendence?0:6-threes; tracker.chaos=Math.min(999,(Number(tracker.chaos)||0)+chaos); summary=triscendence?"Triscendência · sem Caos":threes+" sucesso(s) · +"+chaos+" Caos"; } else if(system==="Daggerheart"){ const hope=Number(payload.hopeDie),fear=Number(payload.fearDie); if(!Number.isInteger(hope)||!Number.isInteger(fear)||hope<1||hope>12||fear<1||fear>12) throw new Error("Informe os dois resultados de d12."); const critical=hope===fear,withFear=fear>hope; if(!critical&&withFear) tracker.fear=Math.min(12,(Number(tracker.fear)||0)+1); summary=critical?"Crítico":withFear?"Resultado com Medo · +1 Medo":"Resultado com Esperança"; } else throw new Error("Sistema de rolagem não suportado."); tracker.rolls=([{id:id(6),system,actor,summary,createdAt:Date.now()},...(tracker.rolls||[])]).slice(0,30); break; }
+    case "dice:record": {
+      // Clientes antigos: os valores enviados são ignorados e a rolagem é sorteada aqui.
+      const system = state.campaign.system, kind = system === "Triangle Agency" ? "triangle" : system === "Daggerheart" ? "daggerheart" : "";
+      if (!kind) throw new Error("Sistema de rolagem não suportado.");
+      recordRoll(state, system, socket.data.name, dice.resolveRoll({ kind, params: payload }, secureRandom));
+      break;
+    }
     case "lore:update": requireGM(socket); state.lore.text = text(payload.value, 30000); break;
     case "npc:save": {
       requireGM(socket); if (!text(payload.name, 80)) throw new Error("Informe o nome do NPC.");
@@ -244,8 +262,28 @@ function applyAction(room, socket, action) {
     default: throw new Error("Ação desconhecida.");
   }
 }
+/** Grava no Escudo do Mestre uma rolagem sorteada pelo servidor (mesmo cálculo de Caos e Medo de antes). */
+function recordRoll(state, system, actor, result) {
+  const tracker = state.gmShield.tracker ||= { chaos: 0, fear: 0, rolls: [] };
+  let summary = "";
+  if (system === "Triangle Agency") {
+    const threes = result.dice.filter(value => value === 3).length, triscendence = threes === 3, chaos = triscendence ? 0 : 6 - threes;
+    tracker.chaos = Math.min(999, (Number(tracker.chaos) || 0) + chaos);
+    summary = triscendence ? "Triscendência · sem Caos" : threes + " sucesso(s) · +" + chaos + " Caos";
+  } else if (system === "Daggerheart") {
+    const critical = result.hopeDie === result.fearDie, withFear = result.fearDie > result.hopeDie;
+    if (!critical && withFear) tracker.fear = Math.min(12, (Number(tracker.fear) || 0) + 1);
+    summary = critical ? "Crítico" : withFear ? "Resultado com Medo · +1 Medo" : "Resultado com Esperança";
+  } else throw new Error("Sistema de rolagem não suportado.");
+  tracker.rolls = ([{ id: id(6), system, actor: text(actor, 80), summary, dice: result.dice, createdAt: Date.now() }, ...(tracker.rolls || [])]).slice(0, 30);
+}
 function fileIdentity(room, token) { return identify(room, token); }
-function fileExt(fileName, mime) { const ext = path.extname(fileName || "").toLowerCase(); if (ext) return ext.slice(0, 10); return mime === "application/pdf" ? ".pdf" : mime === "image/jpeg" ? ".jpg" : mime === "image/png" ? ".png" : mime === "image/webp" ? ".webp" : ".docx"; }
+function uploadDeniedMessage(role, scope) {
+  if (scope === "community") return "A biblioteca aceita somente PDF.";
+  if (role === "gm") return "Formato não suportado.";
+  return scope === "private" ? "Jogadores podem enviar somente a ficha em PDF." : "Jogadores podem enviar somente imagens (retrato da ficha).";
+}
+function fileExt(_fileName, mime) { return extensionFor(mime); }
 function allowedMime(mime) { return ["image/png", "image/jpeg", "image/webp", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a"].includes(mime); }
 function persistUploadSession(session) {
   const serializable = { id: session.id, fingerprint: session.fingerprint, roomId: session.roomId, userId: session.userId, role: session.role, fileName: session.fileName, mime: session.mime, size: session.size, scope: session.scope, kind: session.kind, chunkCount: session.chunkCount, nextIndex: session.nextIndex, chunks: session.chunks, createdAt: session.createdAt, storageUploadUrl: session.storageUploadUrl || "", storagePath: session.storagePath || "" };
@@ -341,6 +379,7 @@ async function uploadLargeFileToStorage(room, actor, session) {
 restoreUploadSessions();
 async function storeFile(room, actor, buffer, fileName, mime, scope) {
   const bucket = buckets[scope] || buckets.public, safeName = id(12) + fileExt(fileName, mime), filePath = room.id + "/" + actor.userId + "/" + safeName;
+  if (!contentMatchesMime(buffer, mime)) { const error = new Error("O conteúdo do arquivo não corresponde ao formato informado."); error.status = 415; throw error; }
   if (supabase) {
     const { error } = await supabase.storage.from(bucket).upload(filePath, buffer, { contentType: mime, cacheControl: "3600", upsert: false });
     if (error) throw error;
@@ -405,26 +444,29 @@ app.post("/api/rooms", async (req, res) => {
 });
 app.post("/api/rooms/:roomId/join", async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), name = text(req.body && req.body.name, 60), invite = text(req.body && req.body.inviteToken, 100);
-    if (!room) return res.status(404).json({ error: "Sala não encontrada." });
-    if (!name) return res.status(400).json({ error: "Informe seu nome." });
-    if (!invite || invite !== room.inviteToken) return res.status(403).json({ error: "Convite inválido. Use o link enviado pelo Mestre." });
-    if (room.state.campaign.availableSeats <= 0) return res.status(403).json({ error: "Não há vagas disponíveis nesta mesa." });
-    const player = { id: id(8), token: id(24), name, character: null };
-    room.state.players.push(player); room.state.campaign.availableSeats = Math.max(0, room.state.campaign.availableSeats - 1); await saveRoom(room);
-    res.json({ room: { id: room.id, title: room.state.campaign.title }, token: player.token, role: "player", userId: player.id, name: player.name });
-    await broadcastRoom(room.id);
-  } catch (error) { res.status(500).json({ error: error.message || "Não foi possível entrar na sala." }); }
+    const roomId = text(req.params.roomId, 30), name = text(req.body && req.body.name, 60), invite = text(req.body && req.body.inviteToken, 100);
+    const outcome = await enqueueRoom(roomId, async () => {
+      const room = await readRoom(roomId);
+      if (!room) return { status: 404, body: { error: "Sala não encontrada." } };
+      if (!name) return { status: 400, body: { error: "Informe seu nome." } };
+      if (!invite || invite !== room.inviteToken) return { status: 403, body: { error: "Convite inválido. Use o link enviado pelo Mestre." } };
+      if (room.state.campaign.availableSeats <= 0) return { status: 403, body: { error: "Não há vagas disponíveis nesta mesa." } };
+      const player = { id: id(8), token: id(24), name, character: null };
+      room.state.players.push(player); room.state.campaign.availableSeats = Math.max(0, room.state.campaign.availableSeats - 1); await saveRoom(room);
+      return { status: 200, roomId: room.id, body: { room: { id: room.id, title: room.state.campaign.title }, token: player.token, role: "player", userId: player.id, name: player.name } };
+    });
+    res.status(outcome.status).json(outcome.body);
+    if (outcome.status === 200) await broadcastRoom(outcome.roomId);
+  } catch (error) { if (!res.headersSent) res.status(500).json({ error: error.message || "Não foi possível entrar na sala." }); }
 });
 app.post("/api/rooms/:roomId/uploads/start", async (req, res) => {
   try {
     const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const input = req.body || {}, scope = ["public", "private", "community"].includes(input.scope) ? input.scope : "public", kind = text(input.kind, 40);
-    if (scope === "private" && actor.role !== "gm" && kind !== "character") return res.status(403).json({ error: "Documentos privados são exclusivos do Mestre." });
-    if (scope === "public" && actor.role !== "gm" && kind !== "character") return res.status(403).json({ error: "Apenas o Mestre pode enviar materiais da campanha." });
     const fileName = text(input.fileName, 220) || "arquivo", mime = text(input.mime, 160), size = Math.trunc(Number(input.size));
     if (!allowedMime(mime)) return res.status(415).json({ error: "Formato não suportado. Use PNG, JPG, WebP, PDF, DOCX ou áudio." });
+    if (!uploadAllowed(actor.role, scope, mime)) return res.status(403).json({ error: uploadDeniedMessage(actor.role, scope) });
     if (!Number.isSafeInteger(size) || size < 1 || size > uploadMaxSize || (mime.startsWith("image/") && size > 30 * 1024 * 1024)) return res.status(413).json({ error: "Imagens: até 30 MB; PDFs: até 30 MB." });
     const fingerprint = [room.id, actor.userId, fileName, size, Math.trunc(Number(input.lastModified) || 0), mime, scope, kind].join("|");
     const existing = [...uploadSessions.values()].find(session => session.fingerprint === fingerprint);
@@ -457,6 +499,10 @@ app.put("/api/rooms/:roomId/uploads/:uploadId/chunks/:index", express.raw({ type
       return res.json({ ok: true, nextIndex: session.nextIndex, repeated: true });
     }
     if (index !== session.nextIndex) return res.status(409).json({ error: "Envie os blocos em sequência." });
+    if (index === 0 && !contentMatchesMime(buffer, session.mime)) {
+      fs.rmSync(session.directory, { recursive: true, force: true }); uploadSessions.delete(session.id);
+      return res.status(415).json({ error: "O conteúdo do arquivo não corresponde ao formato informado." });
+    }
     fs.writeFileSync(path.join(session.directory, index + ".part"), buffer);
     session.chunks[index] = { sha256: digest, size: buffer.length };
     session.nextIndex += 1; persistUploadSession(session);
@@ -472,30 +518,31 @@ app.post("/api/rooms/:roomId/uploads/:uploadId/complete", async (req, res) => {
     if (supabase && session.size > tusChunkSize) saved = await uploadLargeFileToStorage(room, actor, session);
     else { const parts = session.chunks.map((_, index) => fs.readFileSync(path.join(session.directory, index + ".part"))), buffer = Buffer.concat(parts, session.size); saved = await storeFile(room, actor, buffer, session.fileName, session.mime, session.scope); }
     res.json(saved); uploadSessions.delete(session.id); fs.rmSync(session.directory, { recursive: true, force: true });
-  } catch (error) { res.status(500).json({ error: error.message || "Não foi possível concluir o envio." }); }
+  } catch (error) { res.status(error.status || 500).json({ error: error.message || "Não foi possível concluir o envio." }); }
 });
-app.post("/api/rooms/:roomId/uploads", express.raw({ type: "*/*", limit: "151mb" }), async (req, res) => {
+app.post("/api/rooms/:roomId/uploads", express.raw({ type: "*/*", limit: "31mb" }), async (req, res) => {
   try {
     const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const scope = ["public", "private", "community"].includes(req.query.scope) ? req.query.scope : "public";
-    if (scope === "private" && actor.role !== "gm" && req.query.kind !== "character") return res.status(403).json({ error: "Documentos privados são exclusivos do Mestre." });
-    if (scope === "public" && actor.role !== "gm" && req.query.kind !== "character") return res.status(403).json({ error: "Apenas o Mestre pode enviar materiais da campanha." });
-    const mime = text(req.headers["content-type"], 160).split(";")[0], fileName = decodeURIComponent(text(req.headers["x-file-name"], 220) || "arquivo");
+    const mime = text(req.headers["content-type"], 160).split(";")[0];
+    let fileName = "arquivo";
+    try { fileName = decodeURIComponent(text(req.headers["x-file-name"], 220) || "arquivo"); } catch (_) { return res.status(400).json({ error: "Nome de arquivo inválido." }); }
     const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     if (!allowedMime(mime)) return res.status(415).json({ error: "Formato não suportado. Use PNG, JPG, WebP, PDF, DOCX ou áudio." });
+    if (!uploadAllowed(actor.role, scope, mime)) return res.status(403).json({ error: uploadDeniedMessage(actor.role, scope) });
     if (!buffer.length || buffer.length > uploadMaxSize) return res.status(413).json({ error: "O arquivo deve ter até 30 MB." });
     const saved = await storeFile(room, actor, buffer, fileName, mime, scope);
     res.json(saved);
-  } catch (error) { res.status(500).json({ error: error.message || "Não foi possível enviar o arquivo." }); }
+  } catch (error) { res.status(error.status || 500).json({ error: error.message || "Não foi possível enviar o arquivo." }); }
 });
 app.post("/api/rooms/:roomId/files/signed-url", async (req, res) => {
   try {
     const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
-    const bucket = text(req.body && req.body.bucket, 80), filePath = text(req.body && req.body.path, 600);
-    if (bucket === buckets.private && actor.role !== "gm" && filePath.split("/")[1] !== actor.userId) return res.status(403).json({ error: "Acesso restrito ao Mestre ou dono da ficha." });
-    if (!filePath.startsWith(room.id + "/")) return res.status(400).json({ error: "Arquivo inválido." });
+    const bucket = text(req.body && req.body.bucket, 80), filePath = text(req.body && req.body.path, 600), segments = safeStoragePath(room.id, filePath);
+    if (!Object.values(buckets).includes(bucket) || !segments) return res.status(400).json({ error: "Arquivo inválido." });
+    if (bucket === buckets.private && actor.role !== "gm" && segments[1] !== actor.userId) return res.status(403).json({ error: "Acesso restrito ao Mestre ou dono da ficha." });
     const url = supabase ? await signedUrl(bucket, filePath) : bucket === buckets.private ? "/api/rooms/" + room.id + "/private-file?path=" + encodeURIComponent(filePath) + "&token=" + encodeURIComponent(text(req.headers["x-room-token"], 100)) : "/files/" + bucket + "/" + filePath.split("/").map(encodeURIComponent).join("/");
     res.json({ url });
   } catch (error) { res.status(500).json({ error: error.message || "Não foi possível abrir o arquivo." }); }
@@ -506,7 +553,8 @@ app.post("/api/rooms/:roomId/library", async (req, res) => {
     const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const saved = req.body || {};
-    if (saved.bucket !== buckets.community || !text(saved.path, 600) || !saved.path.startsWith(room.id + "/" + actor.userId + "/") || !text(saved.fileName, 180).toLowerCase().endsWith(".pdf") || !text(saved.title, 120)) return res.status(400).json({ error: "Envie um PDF e informe título e sistema." });
+    const librarySegments = safeStoragePath(room.id, text(saved.path, 600));
+    if (saved.bucket !== buckets.community || !librarySegments || librarySegments[1] !== actor.userId || !text(saved.fileName, 180).toLowerCase().endsWith(".pdf") || !text(saved.title, 120)) return res.status(400).json({ error: "Envie um PDF e informe título e sistema." });
     const item = { id: id(8), title: text(saved.title, 120), system: text(saved.system, 80), uploader: actor.name, bucket: buckets.community, file_path: text(saved.path, 600), file_name: text(saved.fileName, 180), created_at: new Date().toISOString() };
     await communityLibraryRepository.insert(item);
     res.json({ item: libraryShape(item) });
@@ -515,19 +563,20 @@ app.post("/api/rooms/:roomId/library", async (req, res) => {
 app.get("/api/rooms/:roomId/private-file", async (req, res) => {
   try {
     const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.query.token, 100));
-    const filePath = text(req.query.path, 600), ownerId = filePath.split("/")[1];
-    if (!room || !actor || (actor.role !== "gm" && actor.userId !== ownerId) || !filePath.startsWith(room.id + "/")) return res.status(403).end();
+    const filePath = text(req.query.path, 600), segments = room && safeStoragePath(room.id, filePath);
+    if (!room || !actor || !segments || (actor.role !== "gm" && actor.userId !== segments[1])) return res.status(403).end();
     if (supabase) {
       const url = await signedUrl(buckets.private, filePath);
       return res.redirect(url);
     }
     const root = path.resolve(dataDir, "uploads", buckets.private), absolute = path.resolve(root, ...filePath.split("/"));
     if (!absolute.startsWith(root + path.sep) || !fs.existsSync(absolute)) return res.status(404).end();
-    res.sendFile(absolute);
+    uploadedFileHeaders(res); res.sendFile(absolute);
   } catch (_) { res.status(404).end(); }
 });
-app.use("/files/" + buckets.public, express.static(path.join(dataDir, "uploads", buckets.public)));
-app.use("/files/" + buckets.community, express.static(path.join(dataDir, "uploads", buckets.community)));
+const uploadedFileHeaders = res => { res.setHeader("X-Content-Type-Options", "nosniff"); res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox"); };
+app.use("/files/" + buckets.public, express.static(path.join(dataDir, "uploads", buckets.public), { setHeaders: uploadedFileHeaders }));
+app.use("/files/" + buckets.community, express.static(path.join(dataDir, "uploads", buckets.community), { setHeaders: uploadedFileHeaders }));
 app.use(express.static(path.join(__dirname, "dist")));
 app.use((req, res, next) => { if (req.path.startsWith("/api/")) return next(); res.sendFile(path.join(__dirname, "dist", "index.html")); });
 
@@ -544,13 +593,33 @@ io.on("connection", socket => {
   readRoom(roomId).then(room => { if (room) socket.emit("room:state", publicState(room, socket.data)); return roomPresence(roomId); }).catch(error => console.error("Não foi possível carregar sala:", error.message));
   socket.on("room:action", (action, callback) => {
     const ack = typeof callback === "function" ? callback : () => {};
-    const previous = actionQueues.get(roomId) || Promise.resolve();
-    const pending = previous.catch(() => {}).then(async () => {
-      try { const latest = await readRoom(roomId); if (!latest) throw new Error("Sala encerrada."); applyAction(latest, socket, action); await saveRoom(latest); await synchronizeJournal(latest, action); await broadcastRoom(roomId); if(['music:control','music:playlist'].includes(action?.type))publishAudio(roomId,latest.state.music); if(action?.type==='profile:nickname') await roomPresence(roomId); ack({ ok: true }); }
-      catch (error) { ack({ ok: false, error: error.message || "Não foi possível salvar." }); }
-    });
-    actionQueues.set(roomId, pending);
-    pending.finally(() => { if (actionQueues.get(roomId) === pending) actionQueues.delete(roomId); });
+    enqueueRoom(roomId, async () => {
+      const latest = await readRoom(roomId); if (!latest) throw new Error("Sala encerrada.");
+      applyAction(latest, socket, action); await saveRoom(latest); await synchronizeJournal(latest, action); await broadcastRoom(roomId);
+      if (['music:control','music:playlist'].includes(action?.type)) publishAudio(roomId, latest.state.music);
+      if (action?.type === 'profile:nickname') await roomPresence(roomId);
+    }).then(() => ack({ ok: true }), error => ack({ ok: false, error: error.message || "Não foi possível salvar." }));
+  });
+  socket.on("dice:roll", (request, callback) => {
+    const ack = typeof callback === "function" ? callback : () => {};
+    const now = Date.now(), recent = (socket.data.rollTimes || []).filter(time => now - time < 10_000);
+    if (recent.length >= 20) return ack({ ok: false, error: "Muitas rolagens seguidas. Aguarde alguns segundos." });
+    socket.data.rollTimes = [...recent, now];
+    let result;
+    try { result = dice.resolveRoll(request, secureRandom, { lastAlpha: socket.data.lastAlpha }); }
+    catch (error) { return ack({ ok: false, error: error.message || "Rolagem inválida." }); }
+    const kind = request.kind;
+    if (kind === "alpha2") socket.data.lastAlpha = { id: id(8), result, rerolled: false };
+    if (kind === "alpha2Reroll") socket.data.lastAlpha = { ...socket.data.lastAlpha, result, rerolled: true };
+    const rollId = kind === "alpha2" || kind === "alpha2Reroll" ? socket.data.lastAlpha.id : undefined;
+    const system = dice.RECORDED_KINDS[kind];
+    if (!system) return ack({ ok: true, result, rollId });
+    enqueueRoom(roomId, async () => {
+      const latest = await readRoom(roomId); if (!latest) throw new Error("Sala encerrada.");
+      if (latest.state.campaign.system !== system) return false;
+      recordRoll(latest.state, system, socket.data.name, result); await saveRoom(latest); await broadcastRoom(roomId);
+      return true;
+    }).then(recorded => ack({ ok: true, result, recorded }), () => ack({ ok: true, result, recorded: false, warning: "Rolagem feita, mas não foi registrada no Escudo do Mestre." }));
   });
   socket.on("disconnect", () => roomPresence(roomId).catch(() => {}));
 });
@@ -564,6 +633,9 @@ if (supabase) {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.error("Supabase Realtime indisponível:", status);
     });
 }
-server.listen(port, "0.0.0.0", () => console.log("Mesa & Dados disponível na porta " + port + (cloud ? " (Supabase)" : " (modo local)")));
+diceReady.then(
+  () => server.listen(port, "0.0.0.0", () => console.log("Astralis disponível na porta " + port + (cloud ? " (Supabase)" : " (modo local)"))),
+  error => { console.error("Não foi possível carregar as regras de rolagem:", error.message); process.exit(1); },
+);
 
 
