@@ -39,6 +39,20 @@ test('M1: Call of Cthulhu usa e grava os valores-base não editados', () => {
   assert.equal(sheet.skills['Escalar'], 60);
 });
 
+test('2.18.1: salvar CoC não congela Esquivar e Idioma Nativo no texto da ficha', () => {
+  const source = read('src/CharacterStudio.jsx');
+  assert.doesNotMatch(source, /next\.stats\.skills\s*=/);
+  assert.match(source, /builderStats\.skills=Object\.entries\(cocSkillValues\(next\.stats\)\)/);
+  const stats = { dex: '50', edu: '60', skills: '' };
+  const { buildCharacterSheet } = loadSheets();
+  const built = Object.entries(cocSkillValues(stats)).map(([name, value]) => name + '=' + value).join('\n');
+  const sheet = buildCharacterSheet('Call of Cthulhu', 'p', 'p', { name: 'T', stats: { ...stats, skills: built } });
+  assert.equal(sheet.skills['Esquivar'], 25);
+  assert.equal(sheet.skills['Idioma · Nativo'], 60);
+  assert.equal(stats.skills, '');
+  assert.equal(cocSkillValues({ ...stats, dex: '70' })['Esquivar'], 35);
+});
+
 test('A8: D&D calcula o bônus da perícia pela ficha', () => {
   const stats = { dexterity: '16', wisdom: '13', proficiencyBonus: '3', skillProficiencies: 'Furtividade=expertise\nPercepção=proficient' };
   assert.deepEqual(dndSkillBonus('Furtividade', stats), { ability: 'dexterity', score: 16, proficiency: 6, training: 'expertise' });
