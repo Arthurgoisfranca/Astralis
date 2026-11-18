@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
-  ADVANCEMENTS, ANCESTRIES, ARMOR, CARD_HINTS, CARD_KINDS, CARDS, CLASSES, CLASS_GEAR,
-  CLASS_HINTS, COMMUNITIES, DISTANCES, FEATURE_HINTS, KIT, POTIONS, SOURCE, TRAITS, TRAIT_KEYS,
+  ADVANCEMENTS, ANCESTRIES, ARMOR, CARD_KINDS, CLASSES,
+  CLASS_HINTS, COMMUNITIES, DISTANCES, KIT, POTIONS, SOURCE, TRAITS, TRAIT_KEYS,
+  cardDescription, classGear, classInfo, featureDescription, hasClassGear, usesVoid, weaponInfoFor,
   TRANSFORMATIONS, WEAPONS, availableCards, builderStatus, canUseClass, normalize, progression,
   signed, suggestedTraits, tierEntry, tierFor, traitAllocation,
 } from './domain/daggerheartStudio.mjs';
@@ -61,7 +62,7 @@ export function CatalogList({ label, items, selected, disabled = () => false, ch
       </div>
       {(info(item) || item.reference) && <details><summary>Ver detalhes</summary>
         {info(item) && <p>{info(item)}</p>}
-        {item.reference && <a href={item.reference} target="_blank" rel="noreferrer">Consultar regra da carta</a>}
+        {item.reference && <a href={item.reference} target="_blank" rel="noreferrer">{item.domain ? 'Consultar regra da carta' : 'Consultar ficha oficial'}</a>}
       </details>}
     </article>)}</div>
     {!shown.length && <p>Nenhuma opção encontrada.</p>}
@@ -79,17 +80,24 @@ export function TraitBar({ traits, onRoll }) {
 }
 
 function SourceSettings({ build, patch, details, update }) {
+  const playtest = usesVoid(build.sources);
   return <>
     <h3>Fontes da campanha</h3>
-    {['hope', 'void4', 'void5'].map(key => <label key={key} className="dh-toggle"><input type="checkbox" checked={build.sources[key]}
-      onChange={e => patch({ sources: { ...build.sources, [key]: e.target.checked } })}/>{SOURCE[key]}{key.startsWith('void') && <small>Playtest</small>}</label>)}
+    <label className="dh-toggle"><input type="checkbox" checked={build.sources.hope}
+      onChange={e => patch({ sources: { ...build.sources, hope: e.target.checked } })}/>{SOURCE.hope}</label>
+    <label className="dh-toggle"><input type="checkbox" checked={playtest}
+      onChange={e => patch({ sources: { ...build.sources, void15: e.target.checked, void4: e.target.checked, void5: e.target.checked } })}/>Usar versões de The Void</label>
+    <p className="dh-help">Habilita as fichas v1.5 de Assassin, Brawler, Warlock e Witch e as cartas Dread dessa edição. Blood Hunter e Summoner usam as fichas de julho de 2026.</p>
+    {playtest && <fieldset className="dh-source-options"><legend>Classes adicionais de playtest</legend>
+      {['void4', 'void5'].map(key => <label key={key} className="dh-toggle"><input type="checkbox" checked={build.sources[key]}
+        onChange={e => patch({ sources: { ...build.sources, [key]: e.target.checked } })}/>{SOURCE[key]}</label>)}
+    </fieldset>}
     <Field label="Cenário ou suplemento da mesa" value={details.frame} onChange={frame => update({ frame })} max={80}/>
-    <p className="dh-help">As duas classes de The Void usam a edição de 9 de julho de 2026. O domínio Blood é compartilhado entre elas.</p>
   </>;
 }
 
-function ClassPreview({ id, choose }) {
-  const item = CLASSES[id];
+function ClassPreview({ id, build, choose }) {
+  const item = classInfo(build, id);
   if (!item) return <p>Escolha uma classe para consultar seus domínios e características.</p>;
   return <>
     <div className="dh-preview-title"><div><small>{SOURCE[item.source]}</small><h3>{item.name}</h3></div>
@@ -98,26 +106,34 @@ function ClassPreview({ id, choose }) {
     <dl className="dh-metrics"><div><dt>Domínios</dt><dd>{item.domains.join(' · ')}</dd></div>
       <div><dt>Evasão</dt><dd>{item.evasion}</dd></div><div><dt>PV iniciais</dt><dd>{item.hp}</dd></div></dl>
     <h4>Habilidade de Esperança</h4><p><b>{item.hope}</b> · 3 Esperança</p>
-    {FEATURE_HINTS[item.hope] && <p>{FEATURE_HINTS[item.hope]}</p>}
+    {featureDescription(item, item.hope) && <p>{featureDescription(item, item.hope)}</p>}
     <h4>Habilidades de classe</h4>
     <ul className="dh-feature-list">{item.features.filter(name => name !== item.hope).map(name =>
-      <li key={name}><b>{name}</b>{FEATURE_HINTS[name] && <p>{FEATURE_HINTS[name]}</p>}</li>)}</ul>
+      <li key={name}><b>{name}</b>{featureDescription(item, name) && <p>{featureDescription(item, name)}</p>}</li>)}</ul>
     <h4>Subclasses</h4><p>{Object.values(item.subclasses).map(sub => sub.name).join(' · ')}</p>
+    {item.reference && <a href={item.reference} target="_blank" rel="noreferrer">Consultar ficha oficial</a>}
   </>;
 }
 
 const weaponMeta = item => `${item.slot === 'primary' ? 'Primária' : 'Secundária'} · ${item.hands} mão(s) · ${TRAITS[item.trait]?.[0] ?? 'Conjuração'} · ${DISTANCES[item.range]}`;
-const weaponInfo = item => `d${item.faces}${item.bonus ? signed(item.bonus) : ''} · ${item.damage === 'phy' ? 'Físico' : item.damage === 'mag' ? 'Mágico' : 'Físico ou mágico'}${item.feature ? ` · ${item.feature}` : ''}`;
+const weaponInfo = item => `d${item.faces}${item.extraFaces ? `+d${item.extraFaces}` : ''}${item.bonus ? signed(item.bonus) : ''} · ${item.damage === 'phy' ? 'Físico' : item.damage === 'mag' ? 'Mágico' : 'Físico ou mágico'}${item.feature ? ` · ${item.feature}` : ''}`;
 const armorMeta = item => `Armadura ${item.score} · Limiares ${item.major}/${item.severe}`;
 export { weaponMeta, weaponInfo, armorMeta, domainText };
 
 function ClassChoices({ build, patch, part, details, update }) {
-  const item = CLASSES[build.classId], subclass = item.subclasses[build.subclass];
-  if (part === 'subclass') return <CatalogList label="Buscar subclasses" items={named(item.subclasses)} selected={[build.subclass]}
+  const item = classInfo(build), subclass = item.subclasses[build.subclass];
+  const [primary, secondary, armor] = item.equipment ?? (build.classId === 'witch' ? ['primary-casting-dagger', 'secondary-rune-shield'] : []);
+  const suggestedWeapon = weaponInfoFor(build, primary);
+  const suggestedSecondary = WEAPONS[secondary];
+  if (part === 'subclass') return <CatalogList label="Buscar subclasses" items={named(item.subclasses).map(sub => ({
+    ...sub, reference: item.reference ? `${item.reference}#page=${build.classId === 'brawler' && item.source === 'void15' ? 4 : 3}` : undefined,
+  }))} selected={[build.subclass]}
     choose={option => patch({ subclass: option.id === build.subclass ? '' : option.id, primary: '', secondary: '' })}
     render={option => option.spellcast ? `Conjuração · ${TRAITS[option.spellcast][0]}` : 'Fundação'}
     info={option => [['Fundação', option.foundation], ['Especialização', option.specialization], ['Maestria', option.mastery]]
-      .filter(([, list]) => list?.length).map(([name, list]) => `${name} · ${list.join(', ')}`).join(' | ')}/>;
+      .filter(([, list]) => list?.length).map(([rank, list]) => <span className="dh-subclass-rank" key={rank}>
+        <strong>{rank}</strong>{list.map(feature => <span key={feature}>{feature}{featureDescription(item, feature) && ` — ${featureDescription(item, feature)}`}</span>)}
+      </span>)}/>;
   if (part === 'traits') return <>
     <p>Distribua +2, +1, +1 e −1 entre quatro atributos distintos. Os outros dois ficam com +0.</p>
     <button type="button" className="dh-button" onClick={() => patch({ traits: suggestedTraits(build) })}>Usar distribuição sugerida</button>
@@ -128,9 +144,9 @@ function ClassChoices({ build, patch, part, details, update }) {
   </>;
   if (part === 'weapons') return <>
     <p>Escolha uma primária de duas mãos ou uma primária e uma secundária de uma mão. Armas mágicas exigem um atributo de Conjuração.</p>
-    {build.classId === 'witch' && <button type="button" onClick={() => patch({ primary: 'primary-casting-dagger', secondary: 'secondary-rune-shield' })}
-      disabled={!subclass?.spellcast}>Equipar Casting Dagger e Rune Shield</button>}
-    <CatalogList label="Buscar armas iniciais" items={Object.values(WEAPONS).filter(weapon => weapon.tier === 1)}
+    {suggestedWeapon && <button type="button" onClick={() => patch({ primary, secondary })}
+      disabled={!subclass?.spellcast && suggestedWeapon.damage !== 'phy'}>Equipar {suggestedWeapon.name}{suggestedSecondary && ` e ${suggestedSecondary.name}`}</button>}
+    <CatalogList label="Buscar armas iniciais" items={Object.values(WEAPONS).filter(weapon => weapon.tier === 1).map(weapon => weaponInfoFor(build, weapon.id))}
       selected={[build.primary, build.secondary]} disabled={weapon => (!subclass?.spellcast && weapon.damage !== 'phy') ||
         (weapon.slot === 'secondary' && (!build.primary || WEAPONS[build.primary]?.hands === 2 && build.classId !== 'warrior'))}
       render={weaponMeta} info={weaponInfo} choose={weapon => patch(weapon.slot === 'primary'
@@ -139,6 +155,7 @@ function ClassChoices({ build, patch, part, details, update }) {
   </>;
   if (part === 'armor') return <>
     <p>O nível é somado aos dois limiares. Cada espaço de armadura pode reduzir em uma faixa a gravidade de um ataque.</p>
+    {armor && <button type="button" onClick={() => patch({ armor })}>Equipar {ARMOR[armor].name}</button>}
     <CatalogList label="Buscar armaduras iniciais" items={Object.values(ARMOR).filter(armor => armor.tier === 1)}
       selected={[build.armor]} choose={armor => patch({ armor: build.armor === armor.id ? '' : armor.id })} render={armorMeta} info={armor => armor.feature}/>
   </>;
@@ -146,14 +163,15 @@ function ClassChoices({ build, patch, part, details, update }) {
     <p>{[...KIT, 'um punhado de ouro'].join(' · ')}</p>
     <div className="dh-fields">
       <Choice label="Poção inicial" value={build.potion} options={Object.entries(POTIONS)} onChange={potion => patch({ potion })}/>
-      <Choice label="Item de classe" value={build.gear} options={CLASS_GEAR[build.classId] ?? []} onChange={gear => patch({ gear })}/>
+      <Choice label="Item de classe" value={hasClassGear(build) ? build.gear : ''} options={classGear(build)} onChange={gear => patch({ gear })}/>
       {subclass?.spellcast && <Field label="Onde você guarda sua magia?" value={details.focus} onChange={focus => update({ focus })} max={80}/>}
     </div>
+    {build.gear && !hasClassGear(build) && <p className="dh-help">Escolha um item de classe disponível nesta edição.</p>}
   </>;
   return <>
     <p>Escolha duas cartas de nível 1 entre {item.domains.join(' e ')}. Você pode escolher as duas do mesmo domínio.</p>
-    <CatalogList label="Buscar cartas iniciais" items={availableCards(item, 1)} selected={build.cards} render={domainText}
-      info={card => CARD_HINTS[card.id] ?? `Custo de resgate · ${card.recall} Estresse`}
+    <CatalogList label="Buscar cartas iniciais" items={availableCards(item, 1, '', '', build.sources)} selected={build.cards} render={domainText}
+      info={card => cardDescription(card) ?? `Custo de resgate · ${card.recall} Estresse`}
       disabled={card => build.cards.length >= 2 && !build.cards.includes(card.id)}
       choose={card => patch({ cards: build.cards.includes(card.id) ? build.cards.filter(id => id !== card.id) : [...build.cards, card.id] })}/>
   </>;
@@ -174,7 +192,8 @@ function Heritage({ build, patch, part }) {
   </>;
   const options = part === 'community' ? COMMUNITIES : TRANSFORMATIONS;
   return <CatalogList label={part === 'community' ? 'Buscar comunidade' : 'Buscar transformação'} items={named(options)}
-    selected={[build[part]]} choose={item => patch({ [part]: build[part] === item.id ? '' : item.id })}/>;
+    selected={[build[part]]} choose={item => patch({ [part]: build[part] === item.id ? '' : item.id })}
+    render={item => item.description} info={item => item.benefit ? <><b>{item.features[0]}</b>{` — ${item.benefit}`}</> : item.features.join(' · ')}/>;
 }
 
 function Story({ build, patch, part, details, update }) {
@@ -194,8 +213,8 @@ function LevelChoices({ build, patch, progress }) {
   const row = build.advances[level - 2] ?? { card: '', exp: '', choices: [] };
   const before = progression({ ...build, level: level - 1 });
   const tier = tierFor(level);
-  const main = CLASSES[build.classId];
-  const options = availableCards(main, level, progress.secondClass, progress.secondDomain).filter(card => !before.known.includes(card.id));
+  const main = classInfo(build);
+  const options = availableCards(main, level, progress.secondClass, progress.secondDomain, build.sources).filter(card => !before.known.includes(card.id));
   const update = changes => patch({ advances: Array.from({ length: build.level - 1 }, (_, i) =>
     i === level - 2 ? { ...row, ...changes } : build.advances[i] ?? { card: '', exp: '', choices: [] }) });
   const setChoice = (index, choice) => update({ choices: Array.from({ length: Math.max(row.choices.length, index + 1) },
@@ -212,12 +231,14 @@ function LevelChoices({ build, patch, progress }) {
       {Array.from({ length: ['multiclass', 'proficiency'].includes(row.choices[0]?.kind) ? 1 : 2 }, (_, index) => {
         const choice = row.choices[index] ?? { tier, kind: '', a: '', b: '', c: '' };
         const apply = changes => setChoice(index, { ...choice, ...changes });
-        const extraClass = CLASSES[choice.a];
+        const extraClass = classInfo(build, choice.a);
         const experiences = [...before.experiences, ...(tierEntry(level) ? [{ name: row.exp }] : [])].map((exp, i) => [String(i), exp.name]).filter(([, name]) => name);
         return <section className="dh-level-choice" key={index}>
           <Choice label={`Avanço ${index + 1}`} value={choice.kind}
-            options={Object.entries(ADVANCEMENTS).filter(([kind]) => (tier >= 3 && (index === 0 || kind === 'subclass')) ||
-              !['multiclass', 'proficiency', 'subclass'].includes(kind))}
+            options={Object.entries(ADVANCEMENTS).filter(([kind]) => {
+              if (kind === 'combo') return build.classId === 'brawler' && main?.source === 'void15';
+              return (tier >= 3 && (index === 0 || kind === 'subclass')) || !['multiclass', 'proficiency', 'subclass'].includes(kind);
+            })}
             onChange={kind => {
               const next = { tier, kind, a: '', b: '', c: '' };
               if (index === 0 && ['proficiency', 'multiclass'].includes(kind)) update({ choices: [next] });
@@ -231,7 +252,7 @@ function LevelChoices({ build, patch, progress }) {
               value={choice[key]} options={choice.kind === 'traits' ? traitOptions : experiences} onChange={value => apply({ [key]: value })}/>)}</div>}
           {choice.kind === 'card' && <Choice label={`Carta extra · avanço ${index + 1}`} value={choice.a} options={asOptions(options)} onChange={a => apply({ a })}/>}
           {choice.kind === 'multiclass' && <div className="dh-fields">
-            <Choice label="Classe adicional" value={choice.a} options={named(CLASSES).filter(item => item.id !== build.classId && canUseClass(item, build.sources)).map(item => [item.id, item.name])}
+            <Choice label="Classe adicional" value={choice.a} options={Object.keys(CLASSES).filter(id => id !== build.classId && canUseClass(classInfo(build, id), build.sources)).map(id => [id, CLASSES[id].name])}
               onChange={a => apply({ a, b: '', c: '' })}/>
             {extraClass && <>
               <Choice label="Domínio adicional" value={choice.b} options={extraClass.domains.filter(domain => !main?.domains.includes(domain))} onChange={b => apply({ b })}/>
@@ -253,7 +274,7 @@ export default function DaggerheartBuilder({ form, setForm, build, patch, detail
   const [browse, setBrowse] = useState(false);
   const [preview, setPreview] = useState(build.classId || 'witch');
   const [query, setQuery] = useState('');
-  const cls = CLASSES[build.classId], progress = progression(build), status = builderStatus(build, form.name, details);
+  const cls = classInfo(build), progress = progression(build), status = builderStatus(build, form.name, details);
   const choosing = stage === 1 && (!cls || browse || !canUseClass(cls, build.sources));
   const substeps = stage === 1 ? CLASS_PARTS : stage === 2 ? HERITAGE_PARTS : stage === 3 ? STORY_PARTS : [];
   const current = substeps.some(([id]) => part === id) ? part : substeps[0]?.[0];
@@ -283,10 +304,10 @@ export default function DaggerheartBuilder({ form, setForm, build, patch, detail
       </>}
       {choosing ? <>
         <Field label="Buscar classes" value={query} onChange={setQuery}/>
-        <div className="dh-class-list">{named(CLASSES).filter(item => canUseClass(item, build.sources) && normalize(item.name).includes(normalize(query.trim())))
+        <div className="dh-class-list">{Object.keys(CLASSES).map(id => ({ id, ...classInfo(build, id) })).filter(item => canUseClass(item, build.sources) && normalize(item.name).includes(normalize(query.trim())))
           .sort((a, b) => a.name.localeCompare(b.name)).map(item =>
             <button type="button" key={item.id} aria-pressed={preview === item.id} onClick={() => setPreview(item.id)}>
-              <b>{item.name}</b><small>{item.domains.join(' / ')}</small></button>)}</div>
+              <b>{item.name}</b><small>{item.domains.join(' / ')}{item.source === 'void15' && ' · The Void v1.5'}</small></button>)}</div>
       </> : substeps.map(([id, name]) => <button className="dh-substep" type="button" key={id} aria-pressed={current === id} onClick={() => setPart(id)}>
         {name}{stage === 1 && <small>{status.remaining[id] ? `${status.remaining[id]} pendente(s)` : '✓'}</small>}
       </button>)}
@@ -299,7 +320,8 @@ export default function DaggerheartBuilder({ form, setForm, build, patch, detail
     <section className="dh-reading" aria-label={sectionTitle} key={`${stage}:${current ?? ''}`}>
       {!choosing && <h3>{sectionTitle}</h3>}
       {stage === 0 && <SourceSettings {...{ build, patch, details, update }}/>}
-      {choosing && <ClassPreview id={canUseClass(CLASSES[preview], build.sources) ? preview : 'bard'} choose={chooseClass}/>}
+      {choosing && <ClassPreview id={canUseClass(classInfo(build, preview), build.sources) ? preview : 'bard'} build={build} choose={chooseClass}/>}
+      {stage === 1 && !choosing && cls.reference && <p className="dh-help"><a href={cls.reference} target="_blank" rel="noreferrer">{SOURCE[cls.source]}</a></p>}
       {stage === 1 && !choosing && <ClassChoices {...{ build, patch, details, update, part: current }}/>}
       {stage === 2 && <Heritage {...{ build, patch, part: current }}/>}
       {stage === 3 && <Story {...{ build, patch, details, update, part: current }}/>}
