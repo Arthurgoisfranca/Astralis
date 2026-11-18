@@ -21,11 +21,11 @@ function parseDate(value) {
   const [year, month, day] = String(value || "").split("-").map(Number);
   return year && month && day ? new Date(year, month - 1, day, 12) : new Date();
 }
-export function Agenda({ items = [], isGM, send }) {
+export function Agenda({ items = [], isGM, send, identity }) {
   const today = new Date();
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(dateKey(today));
-  const [form, setForm] = useState({ title: "", date: dateKey(today), time: "", location: "", notes: "" });
+  const [form, setForm] = useState({ title: "", date: dateKey(today), time: "", durationMin: 180, recurrence: "none", link: "", location: "", notes: "" });
   const year = month.getFullYear(), monthIndex = month.getMonth();
   const firstDay = new Date(year, monthIndex, 1), startOffset = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -41,9 +41,14 @@ export function Agenda({ items = [], isGM, send }) {
   }
   function submit(event) {
     event.preventDefault();
-    send("appointment:add", form);
+    // Converte data+hora locais para UTC ISO; o horário é exibido no fuso de cada navegador.
+    const startsAt = form.date && form.time ? new Date(form.date + "T" + form.time).toISOString() : "";
+    send("appointment:add", { ...form, startsAt });
     setForm(old => ({ ...old, title: "", notes: "" }));
   }
+  const rsvpCounts = item => { const r = Object.values(item.rsvps || {}); return { yes: r.filter(v => v.choice === "yes").length, maybe: r.filter(v => v.choice === "maybe").length, no: r.filter(v => v.choice === "no").length }; };
+  const localTime = item => item.startsAt ? new Date(item.startsAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : (item.time || "Horário a definir");
+  const RECURRENCE_LABEL = { weekly: "semanal", biweekly: "quinzenal", monthly: "mensal" };
   return <div className="view-stack">
     <ModuleHeader eyebrow="AGENDA DA CAMPANHA" title="Calendário de sessões" description="Datas e encontros marcados para o grupo."/>
     <div className="agenda-layout">
@@ -59,9 +64,9 @@ export function Agenda({ items = [], isGM, send }) {
       </section>
       <section className="agenda-details">
         <section className="surface agenda-list"><div className="panel-heading"><div><div className="section-eyebrow">ENCONTROS MARCADOS</div><h2>{parseDate(selected).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</h2></div><span className="count-badge">{dayItems.length}</span></div>
-          {dayItems.length ? dayItems.map(item => <article className="appointment-card" key={item.id}><div className="appointment-time">{item.time || "Horário a definir"}</div><div className="appointment-copy"><b>{item.title}</b>{item.location && <small>{item.location}</small>}{item.notes && <p>{item.notes}</p>}</div>{isGM && <button className="text-action danger" onClick={() => send("appointment:delete", { id: item.id })}>Excluir</button>}</article>) : <Empty>Nenhuma sessão marcada para este dia.</Empty>}
+          {dayItems.length ? dayItems.map(item => { const counts = rsvpCounts(item), mine = item.rsvps?.[identity?.userId]?.choice; return <article className="appointment-card" key={item.id}><div className="appointment-time">{localTime(item)}{item.durationMin ? <small>{Math.round(item.durationMin / 60 * 10) / 10}h</small> : null}</div><div className="appointment-copy"><b>{item.title}</b>{item.recurrence && item.recurrence !== "none" && <span className="recurrence-tag">{RECURRENCE_LABEL[item.recurrence]}</span>}{item.location && <small>{item.location}</small>}{item.link && <a href={item.link} target="_blank" rel="noreferrer">Entrar na sala</a>}{item.notes && <p>{item.notes}</p>}<div className="rsvp-row">{[["yes", "Vou"], ["maybe", "Talvez"], ["no", "Não vou"]].map(([choice, label]) => <button type="button" key={choice} className={"rsvp-button " + (mine === choice ? "chosen" : "")} onClick={() => send("appointment:rsvp", { id: item.id, choice })}>{label} · {counts[choice]}</button>)}</div></div>{isGM && <button className="text-action danger" onClick={() => send("appointment:delete", { id: item.id })}>Excluir</button>}</article>; }) : <Empty>Nenhuma sessão marcada para este dia.</Empty>}
         </section>
-        {isGM && <form className="surface appointment-form" onSubmit={submit}><div className="section-eyebrow">MARCAR SESSÃO</div><label>Título<input required maxLength="120" value={form.title} onChange={event => setForm(old => ({ ...old, title: event.target.value }))} placeholder="Sessão 2 · A trilha do norte"/></label><div className="appointment-fields"><label>Data<input required type="date" value={form.date} onChange={event => { setForm(old => ({ ...old, date: event.target.value })); setSelected(event.target.value); if (event.target.value) setMonth(new Date(parseDate(event.target.value).getFullYear(), parseDate(event.target.value).getMonth(), 1)); }}/></label><label>Horário<input type="time" value={form.time} onChange={event => setForm(old => ({ ...old, time: event.target.value }))}/></label></div><label>Local<input value={form.location} onChange={event => setForm(old => ({ ...old, location: event.target.value }))} placeholder="Discord, endereço, VTT…"/></label><label>Notas<textarea value={form.notes} onChange={event => setForm(old => ({ ...old, notes: event.target.value }))} placeholder="Pauta, preparação ou lembretes"/></label><button className="button secondary">Adicionar à agenda</button></form>}
+        {isGM && <form className="surface appointment-form" onSubmit={submit}><div className="section-eyebrow">MARCAR SESSÃO</div><label>Título<input required maxLength="120" value={form.title} onChange={event => setForm(old => ({ ...old, title: event.target.value }))} placeholder="Sessão 2 · A trilha do norte"/></label><div className="appointment-fields"><label>Data<input required type="date" value={form.date} onChange={event => { setForm(old => ({ ...old, date: event.target.value })); setSelected(event.target.value); if (event.target.value) setMonth(new Date(parseDate(event.target.value).getFullYear(), parseDate(event.target.value).getMonth(), 1)); }}/></label><label>Horário<input type="time" value={form.time} onChange={event => setForm(old => ({ ...old, time: event.target.value }))}/></label></div><div className="appointment-fields"><label>Duração (min)<input type="number" min="0" max="1440" value={form.durationMin} onChange={event => setForm(old => ({ ...old, durationMin: event.target.value }))}/></label><label>Recorrência<select value={form.recurrence} onChange={event => setForm(old => ({ ...old, recurrence: event.target.value }))}><option value="none">Nenhuma</option><option value="weekly">Semanal</option><option value="biweekly">Quinzenal</option><option value="monthly">Mensal</option></select></label></div><label>Link da sala (https)<input type="url" value={form.link} onChange={event => setForm(old => ({ ...old, link: event.target.value }))} placeholder="https://…"/></label><label>Local<input value={form.location} onChange={event => setForm(old => ({ ...old, location: event.target.value }))} placeholder="Discord, endereço, VTT…"/></label><small className="fine-print">O horário é salvo em UTC e exibido no fuso de cada participante.</small><label>Notas<textarea value={form.notes} onChange={event => setForm(old => ({ ...old, notes: event.target.value }))} placeholder="Pauta, preparação ou lembretes"/></label><button className="button secondary">Adicionar à agenda</button></form>}
       </section>
     </div>
   </div>;

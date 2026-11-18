@@ -257,7 +257,7 @@ function App({user, accountClient, openProfile}) {
         <Suspense fallback={moduleLoading}>
         {tab === "workbench" && <Workbench room={roomState} presence={presence} isGM={isGM} onOpen={setTab}/>}
         {tab === "gmShield" && isGM && <GMShield system={roomState.campaign.system} value={roomState.gmShield?.notes || ""} tracker={roomState.gmShield?.tracker} send={send}/>}
-        {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send}/>}
+        {tab === "agenda" && <Agenda items={roomState.appointments || []} isGM={isGM} send={send} identity={identity}/>}
         {tab === "system" && <SystemConsultations value={roomState.systemGuide} isGM={isGM} send={send}/>}
         {tab === "characters" && <Characters room={roomState} identity={identity} system={roomState.campaign.system} isGM={isGM} send={send} roll={rollDice} upload={uploadFile}/>}
         {tab === "lore" && <Lore value={roomState.lore.text} isGM={isGM} send={send}/>}

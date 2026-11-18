@@ -86,6 +86,11 @@ export function Home({ inviteId, setInviteId, rooms, onCreate, onJoin, onResume,
 }
 
 const ROLE_NAMES = { gm: "Mestre", coGm: "Co-mestre", player: "Jogador", spectator: "Espectador" };
+function nextSessionLabel(appointments) {
+  const now = Date.now();
+  const future = (appointments || []).filter(a => a.startsAt && Date.parse(a.startsAt) >= now).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  return future[0] ? new Date(future[0].startsAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+}
 function ManagePanel({ room, send }) {
   const [role, setRole] = useState("player"), [ttlDays, setTtlDays] = useState("7"), [maxUses, setMaxUses] = useState(""), [busy, setBusy] = useState(false);
   const members = (room.players || []).filter(player => !player.removed);
@@ -147,7 +152,7 @@ export function Lobby({ room, presence, isGM, inviteUrl, send, identity, current
     <div className="page-title-row"><div><div className="section-eyebrow">LOBBY DA CAMPANHA</div><h1>{campaign.title}</h1><span className={"status-chip " + (campaign.status || "notStarted")}>{statusNames[campaign.status || "notStarted"]}</span><p>{campaign.system || "Sistema a definir"} <span>·</span> {campaign.sessionCount} sessões realizadas</p></div><span className={"live-pill " + (presence.length ? "live" : "")}><i></i>{presence.length} online</span></div>
     {campaign.illustration && <img className="campaign-banner" src={campaign.illustration} alt={"Imagem de " + campaign.title}/>}
     <div className="summary-grid"><Metric label="Participantes" value={room.players.length + (presence.some(member => member.role === "gm") ? 1 : 0)} detail={room.players.length + " jogadores cadastrados"}/><Metric label="Vagas abertas" value={campaign.availableSeats ?? campaign.totalSeats ?? 0} detail={"de " + (campaign.totalSeats || 0) + " vagas totais"}/><Metric label="Sessões" value={campaign.sessionCount} detail="capítulos registrados"/></div>
-    <div className="campaign-facts surface"><Fact label="Duração" value={campaign.duration}/><Fact label="Estilo" value={campaign.style}/><Fact label="Dia habitual" value={campaign.usualDay}/><Fact label="Próxima sessão" value={[campaign.date, campaign.time].filter(Boolean).join(" · ")}/><Fact label="Local" value={campaign.location}/><Fact label="Classificação" value={campaign.ageRating}/><Fact label="Requisitos" value={campaign.requirements}/><Fact label="Gatilhos" value={campaign.triggers}/><Fact label="Resumo" value={campaign.summary}/><Fact label="Observações" value={campaign.observations}/></div>
+    <div className="campaign-facts surface"><Fact label="Duração" value={campaign.duration}/><Fact label="Estilo" value={campaign.style}/><Fact label="Dia habitual" value={campaign.usualDay}/><Fact label="Próxima sessão" value={nextSessionLabel(room.appointments) || [campaign.date, campaign.time].filter(Boolean).join(" · ")}/><Fact label="Local" value={campaign.location}/><Fact label="Classificação" value={campaign.ageRating}/><Fact label="Requisitos" value={campaign.requirements}/><Fact label="Gatilhos" value={campaign.triggers}/><Fact label="Resumo" value={campaign.summary}/><Fact label="Observações" value={campaign.observations}/></div>
     <div className="lobby-grid">
       <section className="surface members-panel"><div className="panel-heading"><div><div className="section-eyebrow">PRESENÇA</div><h2>Grupo na sala</h2></div><span className="count-badge">{presence.length}</span></div>
         <div className="member-list">{presence.map(member => <div key={member.id} className="member-row"><span className={"member-avatar " + (member.role === "gm" ? "gm-avatar" : "")}>{currentAvatar && identity?.userId===member.id?<img src={currentAvatar} alt={"Avatar de "+member.name} referrerPolicy="no-referrer"/>:member.name.slice(0, 1).toUpperCase()}</span><span><b>{member.name}</b><small>{member.role === "gm" ? "Mestre" : "Jogador"} · conectado</small></span><i className="presence-dot"></i></div>)}</div>
