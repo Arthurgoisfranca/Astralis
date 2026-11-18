@@ -267,6 +267,10 @@ const orderDiceSkills = (input: AdaptiveSheetInput): OrdemParanormalSheet["diceS
  .filter((match):match is RegExpMatchArray => Boolean(match))
  .map(match=>[match[1].trim(),{skillDie:Number(match[2]),attributeDie:Number(match[3])}])
 ));
+/** Ordem Paranormal 2 guarda "Perícia=dX|dY"; o valor numérico da perícia é o número de faces do dado de treino. */
+const orderSkillSides = (input: AdaptiveSheetInput): Readonly<Record<string, number>> => Object.freeze(Object.fromEntries(
+ Object.entries(orderDiceSkills(input)).map(([name, dice]) => [name, dice.skillDie])
+));
 const numericEntries = (input: AdaptiveSheetInput, key: string): Readonly<Record<string, number>> => Object.freeze(Object.fromEntries(
   statText(input, key).split(/[\n,;]/).map(entry => entry.match(/^\s*(.+?)\s*[:=]\s*(-?\d+(?:\.\d+)?)\s*$/)).filter((match): match is RegExpMatchArray => Boolean(match)).map(match => [match[1].trim(), Number(match[2])]),
 ));
@@ -284,7 +288,7 @@ export function buildCharacterSheet(system: SystemId, characterId: string, playe
   switch (system) {
     case "Ordem Paranormal 2": {
       const sheet = base as OrdemParanormalSheet;
-      return { ...sheet, ...identityFields, attributes: { physical: statDie(input, "physical"), mind: statDie(input, "mind"), emotion: statDie(input, "emotion") }, resources: { hitPoints: statTrack(input, "pv"), determination: statTrack(input, "pd") }, className: statText(input, "classe") || input.classLevel || "", level: parseLevel(input), skills: numericEntries(input, "pericias"), diceSkills: orderDiceSkills(input), skillModifiers: {}, levelMarks: Object.freeze(Array.from({ length: parseLevel(input) }, () => false)), relationships: Object.freeze(statList(input, "relacoes")), appearance: input.appearance || "", inventory: Object.freeze(statList(input, "inventory")) };
+      return { ...sheet, ...identityFields, attributes: { physical: statDie(input, "physical"), mind: statDie(input, "mind"), emotion: statDie(input, "emotion") }, resources: { hitPoints: statTrack(input, "pv"), determination: statTrack(input, "pd") }, className: statText(input, "classe") || input.classLevel || "", level: parseLevel(input), skills: orderSkillSides(input), diceSkills: orderDiceSkills(input), skillModifiers: {}, levelMarks: Object.freeze(Array.from({ length: parseLevel(input) }, () => false)), relationships: Object.freeze(statList(input, "relacoes")), appearance: input.appearance || "", inventory: Object.freeze(statList(input, "inventory")) };
     }
     case "Daggerheart": {
       const sheet = base as DaggerheartSheet;
