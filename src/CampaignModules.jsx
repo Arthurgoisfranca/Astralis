@@ -290,7 +290,7 @@ export function Sessions({ items, count, isGM, send }) {
   </div>;
 }
 
-export function Characters({ room, identity, system, isGM, send, upload }) {
+export function Characters({ room, identity, system, isGM, send, roll, upload }) {
   const [editing, setEditing] = useState(null), profile = systemProfile(system);
   const ownPlayer = room.players.find(player => player.id === identity.userId);
   const targets = isGM ? room.players : ownPlayer ? [ownPlayer] : [];
@@ -300,7 +300,7 @@ export function Characters({ room, identity, system, isGM, send, upload }) {
       return <article className="surface character-card" key={player.id}>{player.character?.token && <img className="character-token" src={player.character.token} alt={"Token de " + player.character.name}/>}<div className="character-body"><div className="section-eyebrow">{player.name}</div><h2>{player.character?.name || "Ficha não criada"}</h2><p>{player.character ? [player.character.classLevel, ...primary, player.character.hp ? "PV " + player.character.hp : "", player.character.ac ? "CA " + player.character.ac : ""].filter(Boolean).join(" · ") : "A ficha ainda está vazia."}</p><button className="button secondary" onClick={() => setEditing(player)}>{player.character ? "Editar ficha" : "Criar ficha"}</button></div></article>;
     })}</div>
     {!targets.length && <Empty>Entre na sala como jogador para criar sua ficha.</Empty>}
-    {editing && <CharacterStudio key={editing.id} player={editing} profile={profile} system={system} upload={upload} send={send} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/>}
+    {editing && <CharacterStudio key={editing.id} player={editing} profile={profile} system={system} upload={upload} send={send} roll={roll} onClose={() => setEditing(null)} onSave={async character => { const result = await send("character:save", { ownerId: editing.id, character }); if (!result?.ok) throw new Error(result?.error || "Não foi possível salvar a ficha."); setEditing(null); }}/>}
   </div>;
 }
 function ShieldReferencePanel({ section }) {

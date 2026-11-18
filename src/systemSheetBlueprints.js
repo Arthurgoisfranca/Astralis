@@ -87,6 +87,21 @@ export const SYSTEM_SHEETS={
   s("Detalhes","Itens e registro",[f("inventory","Inventário","rows",{columns:["Item","Categoria","Observações"]}),f("weapons","Equipamento e armas registrados","rows",{columns:["Arma","Dados simbólicos / característica","Observações"]}),f("notes","Anotações","textarea",{rows:4})])
  ]}
 };
+export const DND_SKILLS=dndSkills;
+export const DND_SKILL_ABILITY={"Acrobacia":"dexterity","Adestrar Animais":"wisdom","Arcanismo":"intelligence","Atletismo":"strength","Enganação":"charisma","História":"intelligence","Intuição":"wisdom","Intimidação":"charisma","Investigação":"intelligence","Medicina":"wisdom","Natureza":"intelligence","Percepção":"wisdom","Atuação":"charisma","Persuasão":"charisma","Religião":"intelligence","Prestidigitação":"dexterity","Furtividade":"dexterity","Sobrevivência":"wisdom"};
+export const COC_SKILLS=cocSkills;
+export const V5_PHYSICAL_SKILLS=v5Skills.slice(0,9),V5_SOCIAL_MENTAL_SKILLS=v5Skills.slice(9);
+export const V5_ATTRIBUTES=[["strength","Força"],["dexterity","Destreza"],["stamina","Vigor"],["charisma","Carisma"],["manipulation","Manipulação"],["composure","Autocontrole"],["intelligence","Inteligência"],["wits","Raciocínio"],["resolve","Determinação"]];
+/** Lê o texto "Nome=valor" de uma matriz de perícias. */
+export function parseSkillMap(raw){const out={};String(raw||"").split(/\r?\n|;/).forEach(line=>{const m=line.match(/^\s*(.+?)\s*[:=]\s*(.*?)\s*$/);if(m)out[m[1]]=m[2];});return out;}
+/** Valor-base de uma perícia de Call of Cthulhu: Esquivar = DES/2, Idioma Nativo = EDU, demais pela tabela. */
+export function cocBaseValue(name,base,stats={}){return name==="Esquivar"?Math.floor((Number(stats.dex)||0)/2):name==="Idioma · Nativo"?(Number(stats.edu)||0):Number(base)||0;}
+/** Todas as perícias de Call of Cthulhu com o valor exibido na ficha (editado ou base). */
+export function cocSkillValues(stats={}){const saved=parseSkillMap(stats.skills),out={};for(const [name,base] of cocSkills)out[name]=saved[name]!==undefined&&saved[name]!==""?Number(saved[name])||0:cocBaseValue(name,base,stats);for(const [name,value] of Object.entries(saved))if(!(name in out))out[name]=Number(value)||0;return out;}
+/** Bônus de uma perícia de D&D: modificador do atributo + proficiência (2× com especialização). */
+export function dndSkillBonus(name,stats={}){const training=parseSkillMap(stats.skillProficiencies)[name]||"",prof=Number(stats.proficiencyBonus)||2;return {ability:DND_SKILL_ABILITY[name],score:Number(stats[DND_SKILL_ABILITY[name]])||10,proficiency:training==="expertise"?prof*2:training==="proficient"?prof:0,training};}
+/** Pontos de uma perícia V5, que fica em skillsPhysical ou skillsSocialMental. */
+export function v5SkillDots(name,stats={}){const value=parseSkillMap(stats.skillsPhysical)[name]??parseSkillMap(stats.skillsSocialMental)[name];return Math.max(0,Math.min(5,Number(value)||0));}
 export function sheetDefaults(system,current={}) {
  const stats={...current};
  if(system===VAMPIRE_ALPHA2){for(const [key] of ALPHA_ATTRIBUTES)if(stats[key]===undefined)stats[key]="1";if(stats.generationCategory===undefined)stats.generationCategory="Neonate";if(stats.humanity===undefined)stats.humanity="6";const r=alphaResources(stats);for(const key of ["health","vitae","willpower"])if(stats[key]===undefined)stats[key]=String(r[key]);}
