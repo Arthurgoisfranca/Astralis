@@ -1,6 +1,6 @@
-# Documento de requisitos da correção — segurança e perícias (blocos a + b)
+# Bugfix Requirements Document — segurança e perícias (blocos a + b)
 
-## Introdução
+## Introduction
 
 Esta correção cobre os problemas de gravidade alta levantados em `docs/DIAGNOSTICO.md` que podem ser corrigidos sem criar funcionalidades novas:
 
@@ -21,9 +21,9 @@ Fora do escopo, porque entram nos blocos seguintes: contas obrigatórias, papéi
 
 Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou com o `invite_token`. "Modo local" é o servidor sem credenciais do Supabase, usando SQLite e disco.
 
-## Análise do bug
+## Bug Analysis
 
-### Comportamento atual (defeito)
+### Current Behavior (Defect)
 
 **Acesso a arquivos privados (A1)**
 
@@ -91,7 +91,7 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 
 1.21 QUANDO o usuário roda `npm test` ENTÃO o sistema executa só os arquivos `.cjs` e ignora os quatro arquivos `.mjs`.
 
-### Comportamento esperado (correto)
+### Expected Behavior (Correct)
 
 **Acesso a arquivos privados (A1)**
 
@@ -103,9 +103,13 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 
 2.2 QUANDO um usuário envia um arquivo ENTÃO o sistema DEVE identificar o tipo pelos primeiros bytes (PNG, JPEG, WebP, PDF, DOCX/ZIP, MP3, WAV, OGG, WebM, MP4/M4A) e recusar com 415 o arquivo cujo conteúdo não bate com o tipo declarado.
 
+2.2.1 QUANDO um envio em blocos é concluído, inclusive uma sessão retomada depois de reiniciar o servidor, ENTÃO o sistema DEVE conferir de novo a permissão do papel e o tipo real do primeiro bloco gravado em disco antes de gravar o arquivo no disco ou no Storage.
+
 2.3 QUANDO o sistema grava um arquivo enviado ENTÃO o sistema DEVE escolher a extensão pelo tipo verificado e ignorar a extensão do nome original. O nome original continua sendo devolvido como `name` para exibição.
 
-2.4 QUANDO o modo local serve arquivos de `/files/*` ENTÃO o sistema DEVE enviar `X-Content-Type-Options: nosniff` e `Content-Security-Policy: default-src 'none'; sandbox`.
+2.4 QUANDO o modo local serve arquivos de `/files/*` ou de `private-file` ENTÃO o sistema DEVE enviar `X-Content-Type-Options: nosniff` em todos eles e `Content-Security-Policy: default-src 'none'; sandbox` em todos que não forem PDF.
+
+2.4.1 QUANDO o arquivo servido é PDF ENTÃO o sistema NÃO DEVE enviar o CSP `sandbox`, porque o visualizador de PDF do Chrome não abre documentos com esse cabeçalho. A proteção do PDF vem do tipo verificado, da extensão `.pdf` escolhida pelo servidor e do `nosniff`.
 
 **Permissão de upload do jogador (A3)**
 
@@ -124,7 +128,9 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 
 **Rolagens registradas (A5)**
 
-2.9 QUANDO um participante envia `dice:record` ENTÃO o sistema DEVE sortear os dados no servidor com `crypto.randomInt`, ignorar valores de dados vindos do cliente e devolver os dados sorteados na confirmação (`ack`). Caos e Medo DEVEM ser atualizados a partir desses dados.
+2.9 QUANDO uma rolagem de Triangle Agency ou Daggerheart é feita ENTÃO o sistema DEVE sortear os dados no servidor com `crypto.randomInt`, pelo canal de rolagem do item 2.10.1, e devolver os dados sorteados na confirmação (`ack`). Caos e Medo DEVEM ser atualizados a partir desses dados.
+
+2.9.1 QUANDO um participante envia a ação antiga `dice:record` ENTÃO o sistema DEVE recusá-la com erro, sem sortear e sem alterar Caos, Medo ou o histórico. Nenhum cliente atual usa essa ação.
 
 2.10 QUANDO o sistema registra uma rolagem ENTÃO o sistema DEVE usar como autor o nome do participante autenticado na conexão (`socket.data.name`).
 
@@ -140,6 +146,10 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 
 2.10.4 QUANDO o servidor não responde ou a conexão caiu ENTÃO o sistema DEVE mostrar um aviso de que a rolagem não foi feita e NÃO DEVE sortear no navegador.
 
+2.10.4.1 QUANDO o servidor demora mais que o tempo de espera do navegador ENTÃO o aviso DEVE dizer que o resultado não chegou, e não que a rolagem não foi feita, porque o servidor ainda pode registrá-la no Escudo do Mestre.
+
+2.10.2.1 QUANDO um parâmetro numérico de rolagem não é inteiro (ex.: `2.9`) ENTÃO o servidor DEVE recusá-lo, em vez de arredondar.
+
 2.10.5 QUANDO a opção "Usar metade" do Vampire Alpha 2.0 é escolhida ENTÃO o sistema PODE continuar calculando no navegador, porque não há sorteio.
 
 **Entrada concorrente na mesa (A6)**
@@ -151,6 +161,8 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 2.12 QUANDO o Mestre tem alterações não salvas no formulário da campanha e chega uma atualização da mesa ENTÃO o sistema DEVE manter a edição em andamento.
 
 2.12.1 QUANDO não há alteração pendente, ou depois que o Mestre salva ou descarta, ENTÃO o sistema DEVE voltar a refletir os dados do servidor.
+
+2.12.2 QUANDO o Mestre continua digitando enquanto o salvamento está em andamento ENTÃO o sistema DEVE manter o formulário como pendente e não descartar o que foi digitado depois do envio.
 
 **Perícias nas rolagens (A8)**
 
@@ -168,7 +180,9 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 
 **Valores-base de Call of Cthulhu (M1)**
 
-2.18 QUANDO uma ficha de Call of Cthulhu é salva ENTÃO o sistema DEVE gravar em `skills` todas as perícias da matriz com o valor exibido: o valor editado pelo usuário ou, sem edição, o valor-base (Esquivar = ⌊DES/2⌋, Idioma Nativo = EDU, demais pela tabela).
+2.18 QUANDO uma ficha de Call of Cthulhu é salva ENTÃO o sistema DEVE gravar em `sheet.skills` (a ficha montada) todas as perícias da matriz com o valor exibido: o valor editado pelo usuário ou, sem edição, o valor-base (Esquivar = ⌊DES/2⌋, Idioma Nativo = EDU, demais pela tabela).
+
+2.18.1 QUANDO uma ficha de Call of Cthulhu é salva ENTÃO o texto `stats.skills` DEVE guardar só as perícias que o usuário editou. Assim, Esquivar e Idioma Nativo continuam acompanhando DES e EDU enquanto não forem editados.
 
 **Ferramentas de validação (A10, M14, M15)**
 
@@ -180,11 +194,11 @@ Convenção: "Mestre" é quem usa o `gm_token` da mesa. "Jogador" é quem entrou
 
 2.22 QUANDO o usuário roda `npm test` ENTÃO o sistema DEVE executar todos os arquivos `tests/*.test.cjs` e `tests/*.test.mjs`.
 
-### Comportamento que não muda (prevenção de regressão)
+### Unchanged Behavior (Regression Prevention)
 
 3.1 QUANDO o Mestre ou o dono legítimo pede um arquivo privado válido ENTÃO o sistema DEVE CONTINUAR A entregar o arquivo, por redirecionamento para URL assinada no Supabase ou pelo disco no modo local.
 
-3.2 QUANDO o Mestre envia mapas, capas, NPCs, handouts, documentos (PDF/DOCX) e músicas (MP3, OGG, WAV, M4A) ENTÃO o sistema DEVE CONTINUAR A aceitar esses arquivos nos mesmos escopos, com o mesmo limite de 30 MB e o mesmo fluxo de envio em blocos com retomada.
+3.2 QUANDO o Mestre envia mapas, capas, NPCs, handouts, documentos (PDF/DOCX) e músicas (MP3, OGG, WAV, M4A) ENTÃO o sistema DEVE CONTINUAR A aceitar esses arquivos nos mesmos escopos, com o mesmo limite de 30 MB, o mesmo fluxo de envio em blocos com retomada e erros de tamanho respondidos em JSON.
 
 3.3 QUANDO um jogador envia o retrato da ficha (imagem, escopo `public`), a ficha em PDF (escopo `private`) ou um PDF da biblioteca (escopo `community`) ENTÃO o sistema DEVE CONTINUAR A aceitar o envio.
 
