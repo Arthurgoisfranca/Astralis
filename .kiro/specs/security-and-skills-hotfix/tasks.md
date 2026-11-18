@@ -51,46 +51,48 @@ Tarefas marcadas `[x]` foram implementadas e testadas nos commits indicados. As 
 - [x] 7. Manter a edição pendente da campanha no lobby (commit `6614baa`)
   - _Requirements: 2.12, 2.12.1, 3.9_
 
-- [ ] 8. Fechar as brechas restantes de upload
-  - [ ] 8.1 Em `uploads/:id/complete`, conferir `uploadAllowed(session.role, session.scope, session.mime)` e o tipo real dos primeiros bytes de `0.part` antes de gravar no disco ou no Storage (inclusive o envio grande via TUS); se falhar, apagar a sessão e responder 403 ou 415 (P1)
+- [x] 8. Fechar as brechas restantes de upload (commit `ca1fbf5`)
+  - [x] 8.1 Em `uploads/:id/complete`, conferir `uploadAllowed(session.role, session.scope, session.mime)` e o tipo real dos primeiros bytes de `0.part` antes de gravar no disco ou no Storage (inclusive o envio grande via TUS); se falhar, apagar a sessão e responder 403 ou 415 (P1)
     - _Requirements: 2.2.1, 2.5, 2.6_
-  - [ ] 8.2 `uploadedFileHeaders(res, filePath)`: `nosniff` sempre; CSP `default-src 'none'; sandbox` só fora de `.pdf`; aplicar em `/files/*` e em `private-file` (P2)
+  - [x] 8.2 `uploadedFileHeaders(res, filePath)`: `nosniff` sempre; CSP `default-src 'none'; sandbox` só fora de `.pdf`; aplicar em `/files/*` e em `private-file` (P2)
     - _Requirements: 2.4, 2.4.1, 3.1_
-  - [ ] 8.3 Limitar `express.raw` do envio único a `uploadMaxSize` e responder `entity.too.large` em JSON num middleware de erro (P3)
+  - [x] 8.3 Limitar `express.raw` do envio único a `uploadMaxSize` e responder `entity.too.large` em JSON num middleware de erro (P3)
     - _Requirements: 3.2_
-  - [ ] 8.4 Testes: `complete` recusa sessão com `0.part` adulterado e papel sem permissão; PDF sem `sandbox` e PNG com `sandbox`, ambos com `nosniff`; envio único de 31 MB responde 413 em JSON
+  - [x] 8.4 Testes: `complete` recusa sessão com `0.part` adulterado e papel sem permissão; PDF sem `sandbox` e PNG com `sandbox`, ambos com `nosniff`; envio único de 31 MB responde 413 em JSON
     - _Requirements: 2.2.1, 2.4, 2.4.1, 3.2_
 
-- [ ] 9. Fechar as brechas restantes das rolagens
-  - [ ] 9.1 Remover o `case "dice:record"` de `applyAction` (P4)
+- [x] 9. Fechar as brechas restantes das rolagens (commit `ca1fbf5`)
+  - [x] 9.1 Remover o `case "dice:record"` de `applyAction` (P4)
     - _Requirements: 2.9.1_
-  - [ ] 9.2 `int()` em `serverDice.mjs` recusa valores não inteiros (P5)
+  - [x] 9.2 `int()` em `serverDice.mjs` recusa valores não inteiros (P5)
     - _Requirements: 2.10.2.1_
-  - [ ] 9.3 Mensagem de tempo esgotado em `rollDice`: o resultado não chegou e pode ter sido registrado no Escudo (P6)
+  - [x] 9.3 Mensagem de tempo esgotado em `rollDice`: o resultado não chegou e pode ter sido registrado no Escudo (P6)
     - _Requirements: 2.10.4.1_
-  - [ ] 9.4 Testes: `dice:record` responde `ok:false` sem alterar o `tracker`; `resolveRoll` recusa `2.9`; limite de 20 rolagens por 10 s; rerrolagem Alpha 2.0 pelo socket (uma vez, só a última rolagem); Medo com teto 12 e histórico de 30 itens
+  - [x] 9.4 Testes: `dice:record` responde `ok:false` sem alterar o `tracker`; `resolveRoll` recusa `2.9`; limite de 20 rolagens por 10 s; rerrolagem Alpha 2.0 pelo socket (uma vez, só a última rolagem); Medo com teto 12 e histórico de 30 itens
     - _Requirements: 2.9.1, 2.10.2.1, 2.10.3, 3.5_
 
-- [ ] 10. Não perder a digitação durante o salvamento da campanha
-  - [ ] 10.1 Guardar a cópia do formulário enviado e só limpar `dirty` se o formulário atual for igual a ela (P7)
+- [x] 10. Não perder a digitação durante o salvamento da campanha (commit `9ec1600`)
+  - [x] 10.1 Guardar a cópia do formulário enviado e só limpar `dirty` se o formulário atual for igual a ela (P7)
     - _Requirements: 2.12.2, 3.9_
 
-- [ ] 11. Manter os valores-base de Call of Cthulhu dinâmicos
-  - [ ] 11.1 No `save` de `CharacterStudio.jsx`, deixar `stats.skills` só com as perícias editadas e passar a `buildCharacterSheet` um `builderStats.skills` montado com `cocSkillValues` (P8)
+- [x] 11. Manter os valores-base de Call of Cthulhu dinâmicos (commit `9ec1600`)
+  - [x] 11.1 No `save` de `CharacterStudio.jsx`, deixar `stats.skills` só com as perícias editadas e passar a `buildCharacterSheet` um `builderStats.skills` montado com `cocSkillValues` (P8)
     - _Requirements: 2.18, 2.18.1, 3.10_
-  - [ ] 11.2 Teste: salvar ficha CoC sem editar perícias mantém `stats.skills` sem as perícias-base e grava `sheet.skills.Esquivar = ⌊DES/2⌋` e `sheet.skills["Idioma · Nativo"] = EDU`
+  - [x] 11.2 Teste: salvar ficha CoC sem editar perícias mantém `stats.skills` sem as perícias-base e grava `sheet.skills.Esquivar = ⌊DES/2⌋` e `sheet.skills["Idioma · Nativo"] = EDU`
     - _Requirements: 2.18, 2.18.1_
 
-- [ ] 12. Ampliar os testes de tipo real
+- [x] 12. Ampliar os testes de tipo real (commit `ca1fbf5`)
   - Assinaturas de JPEG, WebP, WAV, WebM, MP4/M4A, MP3 por frame sync e DOCX em `sniffFamily`, cada uma aceita com o MIME certo e recusada com outro
   - _Requirements: 2.2_
 
-- [ ] 13. Arrumar os artefatos da revisão
+- [x] 13. Arrumar os artefatos da revisão (commit `ef4c1a1`)
   - Adicionar `semantic-review/` ao `.gitignore` (P9)
   - _Requirements: 3.15_
 
 - [ ] 14. Checkpoint — validar tudo
-  - Rodar `npm run typecheck`, `npm test` e `npm run build`; todos passam
+  - [x] Rodar `npm run typecheck`, `npm test` (60/60) e `npm run build`; todos passam
+  - [x] Teste com o build real em modo local: `/api/health`, `index.html`, bundle, rota `/join/...` e JSON malformado respondendo 400 em JSON
+  - [ ] Conferência manual no Chrome (abaixo), feita pelo usuário
   - Subir o servidor em modo local e conferir no Chrome: abrir PDF de Documentos do Mestre e da Biblioteca; enviar mapa, música e retrato; rolar em cada sistema; dois navegadores entrando ao mesmo tempo
   - Perguntar ao usuário se há dúvidas antes do merge na `main`
   - _Requirements: 3.1–3.15_
