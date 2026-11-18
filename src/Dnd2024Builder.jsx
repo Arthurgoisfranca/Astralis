@@ -1,18 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ABILITIES, ABILITY_KEYS, BACKGROUNDS, CLASSES, LANGUAGES, METAMAGIC, ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, STYLES, TOOLS, WEAPONS, spellLabel } from './domain/dnd2024Catalog.mjs';
-import { BUILDER_STEPS, POINT_COST, STANDARD_ARRAY, blessedStrikes, classData, classEntry, featureLevels, fightingStyles, isInnateCaster,
-  masteryCapacity, metamagicCapacity, newAbilityRolls, sharesSpellChoices, signedNumber, skillBonus, subclassData } from './domain/dnd2024Rules.mjs';
+import { ABILITIES, ABILITY_KEYS, BACKGROUNDS, CLASSES, FEATS, FEAT_CATEGORIES, INSTRUMENTS, LANGUAGES, METAMAGIC,
+  ORIGIN_FEATS, SKILLS, SKILL_KEYS, SPECIES, STYLES, TOOLS, WEAPONS, featInfo, spellLabel } from './domain/dnd2024Catalog.mjs';
+import { BUILDER_STEPS, POINT_COST, STANDARD_ARRAY, blessedStrikes, classData, classEntry, classStyleSelections, featureLevels, fightingStyles, isInnateCaster,
+  humanFeatOptions, masteryCapacity, metamagicCapacity, newAbilityRolls, sharesSpellChoices, signedNumber, skillBonus, subclassData } from './domain/dnd2024Rules.mjs';
 
-const ORIGIN_LABELS = { 'Magic Initiate (Cleric)': 'Iniciado em Magia (Clérigo)', 'Magic Initiate (Druid)': 'Iniciado em Magia (Druida)',
-  'Magic Initiate (Wizard)': 'Iniciado em Magia (Mago)', Tough: 'Robusto', Alert: 'Alerta', Skilled: 'Habilidoso', 'Savage Attacker': 'Atacante Selvagem' };
 const LANGUAGES_AVAILABLE = LANGUAGES.filter(language => language !== 'Comum');
 const STYLE_LABELS = {
-  Archery: 'Arquearia', 'Blind Fighting': 'Combate às Cegas', Defense: 'Defesa', Dueling: 'Duelo',
-  'Great Weapon Fighting': 'Combate com Armas Grandes', Interception: 'Interceptação', Protection: 'Proteção',
-  'Thrown Weapon Fighting': 'Combate com Armas de Arremesso', 'Two-Weapon Fighting': 'Combate com Duas Armas',
-  'Unarmed Fighting': 'Combate Desarmado', 'Blessed Warrior': 'Combatente Abençoado', 'Druidic Warrior': 'Combatente Druídico',
+  'Blessed Warrior': 'Combatente Abençoado', 'Druidic Warrior': 'Combatente Druídico',
 };
-const styleOptions = styles => styles.map(style => [style, STYLE_LABELS[style] ?? style]);
+const styleOptions = styles => styles.map(style => [style, featInfo(style)?.label ?? STYLE_LABELS[style] ?? style]);
 const normalizeSearch = value => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const BACKGROUND_ROLLS = {
   alignment: ['Leal e Bom', 'Neutro e Bom', 'Caótico e Bom', 'Leal e Neutro', 'Neutro', 'Caótico e Neutro', 'Leal e Mau', 'Neutro e Mau', 'Caótico e Mau'],
@@ -40,8 +36,8 @@ export function TextField({ label, value, onChange, long = false, maxLength = 80
 const abilityOptions = (keys = ABILITY_KEYS) => keys.map(key => [key, ABILITIES[key][0]]);
 const skillOptions = keys => keys.map(key => [key, SKILLS[key][0]]);
 const sourceOptions = catalog => Object.entries(catalog).map(([key, item]) => [key, item.name]);
-const labelFeat = feat => ORIGIN_LABELS[feat] ?? feat;
-const featOptions = ORIGIN_FEATS.map(feat => [feat, labelFeat(feat)]);
+const labelFeat = feat => featInfo(feat)?.label ?? feat;
+const featOptions = ORIGIN_FEATS.map(feat => [feat, labelFeat(feat)]).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
 
 function Multiple({ label, options, selected, limit, onChange }) {
   return <fieldset className="dnd24-multiple">
@@ -149,10 +145,12 @@ function ClassStage({ build, details, patch }) {
           {subclass?.terrains && <Select label="Terreno do Círculo da Terra" value={selected.terrain}
             options={Object.keys(subclass.terrains)} onChange={terrain => patchEntry({ terrain })}/>}
         </>}
-        {canFightStyle && <Select label="Estilo de luta" value={selected.style} options={styleOptions(fightingStyles(selected))}
+        {canFightStyle && <Select label="Estilo de luta" value={selected.style} options={styleOptions(fightingStyles(selected).filter(style =>
+          !build.classes.some(entry => entry.id !== selected.id && classStyleSelections(entry).includes(style))))}
           onChange={style => patchEntry({ style, ...(style === selected.extraStyle ? { extraStyle: '' } : {}) })}/>}
         {subclass?.id === 'Champion' && selected.level >= 7 && <Select label="Estilo de luta adicional" value={selected.extraStyle}
-          options={styleOptions(STYLES.filter(style => style !== selected.style))} onChange={extraStyle => patchEntry({ extraStyle })}/>}
+          options={styleOptions(STYLES.filter(style => style !== selected.style &&
+            !build.classes.some(entry => entry.id !== selected.id && classStyleSelections(entry).includes(style))))} onChange={extraStyle => patchEntry({ extraStyle })}/>}
         {metamagicCapacity(selected) > 0 && <Multiple label="Metamagia" options={METAMAGIC}
           selected={(selected.metamagic ?? []).slice(0, metamagicCapacity(selected))}
           limit={metamagicCapacity(selected)} onChange={metamagic => patchEntry({ metamagic })}/>}
@@ -210,9 +208,11 @@ function BackgroundStage({ build, details, patch }) {
   return <div className="dnd24-columns">
     <div className="dnd24-card"><Catalogue label="antecedentes" value={build.background}
       options={[...sourceOptions(BACKGROUNDS), ['custom', 'Antecedente personalizado']]}
-      onChange={background => patch({ background, bonuses: [], backgroundKit: '', backgroundTool: '' })}/></div>
+      onChange={background => patch({ background, bonuses: [], backgroundKit: '', backgroundTool: '', backgroundKitTool: '',
+        featChoices: Object.fromEntries(Object.entries(build.featChoices ?? {}).filter(([id]) => id !== 'origin:background')) })}/></div>
     <div className="dnd24-card">
       <h3>{background?.name || 'Antecedente'}</h3>
+      {background?.summary && <p>{background.summary}</p>}
       {build.background === 'custom' && <>
         <TextField label="Nome do antecedente" value={build.custom.backgroundName} onChange={backgroundName => custom({ backgroundName })}/>
         <Multiple label="Atributos elegíveis" options={abilityOptions()} selected={build.custom.abilities ?? []} limit={3}
@@ -228,6 +228,7 @@ function BackgroundStage({ build, details, patch }) {
         <dt>Perícias</dt><dd>{background.skills.map(key => SKILLS[key][0]).join(', ') || '—'}</dd>
         <dt>Ferramentas</dt><dd>{background.tool || background.tools?.join(' / ') || '—'}</dd>
       </dl>}
+      {featInfo(background?.feat)?.summary && <p>{featInfo(background.feat).summary}</p>}
     </div>
   </div>;
 }
@@ -285,17 +286,61 @@ function AbilityStage({ build, details, patch }) {
   </>;
 }
 
+function FeatChoices({ row, build, patch, go }) {
+  const { id, info, group, selected, expertOptions, expertSkill, expert, name } = row;
+  const set = changes => patch({ featChoices: { ...build.featChoices, [id]: { ...build.featChoices?.[id], ...changes } } });
+  const options = group?.options.map(key => [key, SKILLS[key]?.[0] ?? key]);
+  return <>
+    {info?.summary && <p>{info.summary}</p>}
+    {group && (group.count === 1
+      ? <Select label={group.label} options={options} value={selected[0]} onChange={value => set({ selected: value ? [value] : [] })}/>
+      : <Multiple label={group.label} options={options} selected={selected} limit={group.count} onChange={values => set({ selected: values })}/>)}
+    {expertSkill && <Select label="Especialização concedida pelo talento" options={skillOptions(expertOptions)}
+      value={expert} onChange={expertise => set({ expertise })}/>}
+    {info?.list && <Select label="Atributo de conjuração" options={abilityOptions(['intelligence', 'wisdom', 'charisma'])}
+      value={build.magicAbilities[name]} onChange={ability => patch({ magicAbilities: { ...build.magicAbilities, [name]: ability } })}/>}
+    {(info?.list || ['fey', 'shadow', 'ritual'].includes(info?.spells)) && <button type="button" onClick={() => go('Magias')}>
+      {info?.list ? 'Escolher truques e magia' : 'Escolher magias do talento'}</button>}
+  </>;
+}
+
+function FeatCatalogue() {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const query = normalizeSearch(search.trim());
+  const rows = Object.entries(FEATS).filter(([name, feat]) => (!category || feat.category === category) &&
+    (!query || normalizeSearch(`${feat.label} ${name}`).includes(query))).sort((a, b) => a[1].label.localeCompare(b[1].label, 'pt-BR'));
+  return <details className="dnd24-card dnd24-feat-catalogue">
+    <summary>Consultar os {Object.keys(FEATS).length} talentos do Livro do Jogador</summary>
+    <div className="dnd24-fields">
+      <TextField label="Buscar talento" value={search} onChange={setSearch}/>
+      <Select label="Categoria do talento" options={Object.entries(FEAT_CATEGORIES)} value={category} onChange={setCategory} hint="Todas"/>
+    </div>
+    <p role="status">{rows.length} {rows.length === 1 ? 'talento' : 'talentos'}</p>
+    <div className="dnd24-feat-list">{rows.map(([name, feat]) => {
+      const needs = feat.requires;
+      const armor = { light: 'armadura leve', medium: 'armadura média', heavy: 'armadura pesada', shield: 'escudo' };
+      const requirements = [feat.level && `nível ${feat.level}+`,
+        needs?.scores && `${needs.scores.map(key => ABILITIES[key][0]).join(' ou ')} 13+`,
+        needs?.armor && `treinamento com ${armor[needs.armor]}`,
+        needs?.style && 'característica de Estilo de Luta',
+        needs?.magic && 'Conjuração ou Magia de Pacto', needs?.spellcasting && 'característica de Conjuração'].filter(Boolean);
+      return <article className="dnd24-subcard" key={name}>
+        <strong>{feat.label}</strong> <small>{[FEAT_CATEGORIES[feat.category], ...requirements].join(' · ')}</small><p>{feat.summary}</p>
+      </article>;
+    })}</div>
+  </details>;
+}
+
 function FeatStage({ build, details, patch, go }) {
   return <div className="dnd24-columns">
     <div className="dnd24-card"><h3>Talentos de origem</h3>
-      {build.species === 'human' && <Select label="Talento adicional do Humano" options={featOptions.filter(([feat]) => feat !== details.background?.feat)}
-        value={build.humanFeat} onChange={humanFeat => patch({ humanFeat })}/>}
-      {details.origins.map(feat => <div key={feat} className="dnd24-subcard"><strong>{labelFeat(feat)}</strong>
-        {feat.startsWith('Magic Initiate') && <>
-          <Select label="Atributo de conjuração" options={abilityOptions(['intelligence', 'wisdom', 'charisma'])}
-            value={build.magicAbilities[feat]} onChange={ability => patch({ magicAbilities: { ...build.magicAbilities, [feat]: ability } })}/>
-          <button type="button" onClick={() => go('Magias')}>Escolher truques e magia</button>
-        </>}
+      {build.species === 'human' && <Select label="Talento adicional do Humano"
+        options={featOptions.filter(([name]) => humanFeatOptions(details.background?.feat).includes(name))}
+        value={build.humanFeat} onChange={humanFeat => patch({ humanFeat,
+          featChoices: Object.fromEntries(Object.entries(build.featChoices ?? {}).filter(([id]) => id !== 'origin:human')) })}/>}
+      {details.originRows.map(row => <div key={row.id} className="dnd24-subcard"><strong>{row.label}</strong><small> · {row.source}</small>
+        <FeatChoices {...{ row, build, patch, go }}/>
       </div>)}
     </div>
     <div className="dnd24-card"><h3>Talentos de nível</h3>
@@ -303,21 +348,23 @@ function FeatStage({ build, details, patch, go }) {
       {details.feats.map(slot => {
         const choice = build.feats[slot.id] ?? {};
         const update = next => patch({ feats: { ...build.feats, [slot.id]: { ...choice, ...next } } });
-        const options = [['Ability Score Improvement', 'Aumento no Valor de Atributo'], ['Custom', 'Talento personalizado']];
-        if (slot.epic) options.push(['Boon of Fate', 'Dádiva do Destino'], ['Boon of Combat Prowess', 'Dádiva de Valentia em Combate']);
-        else options.push(['Grappler', 'Agarrador'], ['Tough', 'Robusto']);
-        return <div key={slot.id} className="dnd24-subcard"><h4>{slot.name} · nível {slot.level}</h4>
-          <Select label="Talento" value={choice.name} options={options} onChange={name => update({ name, values: [], label: '' })}/>
+        const options = slot.options.map(name => [name, labelFeat(name)]).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+        const selectFeat = name => patch({ feats: { ...build.feats, [slot.id]: { name, values: [], label: '' } },
+          featChoices: Object.fromEntries(Object.entries(build.featChoices ?? {}).filter(([id]) => id !== slot.id)) });
+        const row = slot.row;
+        return <div key={slot.id} className="dnd24-subcard"><h4>{slot.name} · nível {slot.level}{slot.epic && ' · Dádiva Épica'}</h4>
+          <Select label={`Talento · ${slot.name} ${slot.level}`} value={row || choice.name === 'Custom' ? choice.name : ''} options={[...options, ['Custom', 'Talento personalizado']]} onChange={selectFeat}/>
+          {choice.name && !row && choice.name !== 'Custom' && <p>Revise os pré-requisitos de {labelFeat(choice.name)} ou escolha outro talento.</p>}
           {choice.name === 'Custom' && <TextField label="Nome do talento" value={choice.label} onChange={label => update({ label })}/>}
-          {choice.name === 'Ability Score Improvement' && <Multiple label="Um atributo +2 ou dois +1" options={abilityOptions()}
-            selected={choice.values || []} limit={2} onChange={values => update({ values })}/>}
-          {choice.name?.startsWith('Boon') && <Select label="Atributo +1" value={choice.values?.[0]} options={abilityOptions()}
-            onChange={value => update({ values: [value] })}/>}
-          {choice.name === 'Grappler' && <Select label="Atributo +1" value={choice.values?.[0]} options={abilityOptions(['strength', 'dexterity'])}
-            onChange={value => update({ values: [value] })}/>}
+          {row?.info?.abilities && (choice.name === 'Ability Score Improvement'
+            ? <Multiple label="Um atributo +2 ou dois +1" options={abilityOptions(row.abilityOptions)} selected={row.abilityPicks} limit={2} onChange={values => update({ values })}/>
+            : <Select label="Atributo +1" value={row.ability} options={abilityOptions(row.abilityOptions)}
+              onChange={value => update({ values: value ? [value] : [] })}/>)}
+          {row && <FeatChoices {...{ row, build, patch, go }}/>}
         </div>;
       })}
     </div>
+    <FeatCatalogue/>
   </div>;
 }
 
@@ -333,16 +380,12 @@ function SkillStage({ build, details, patch }) {
           : group.id === 'bard:lore' ? patchEntry('bard', { loreSkills: skills }) : patchEntry(group.id, { skills })}/>)}
       {details.expertiseGroups.map(group => <Multiple key={group.id} label={group.title} options={skillOptions(group.allowed)}
         selected={group.values} limit={group.count} onChange={expertise => patchEntry(group.id, { expertise })}/>)}
-      {details.origins.includes('Skilled') && <Multiple label="Habilidoso" options={[
-        ...skillOptions(SKILL_KEYS.filter(key => !details.baseSkills.includes(key))), ...TOOLS.filter(key => !details.baseTools.includes(key)),
-      ]} selected={(build.skilled ?? []).filter(key => !details.baseSkills.includes(key) && !details.baseTools.includes(key))}
-        limit={3} onChange={skilled => patch({ skilled })}/>}
       {details.background?.tools && <Select label="Ferramenta do antecedente" options={details.background.tools}
         value={build.backgroundTool} onChange={backgroundTool => patch({ backgroundTool })}/>}
       {build.classes.map((entry, index) => {
         const data = classData(entry), count = index === 0 ? data.toolPicks : entry.id === 'bard' ? 1 : 0;
         return count ? <Multiple key={entry.id} label={`Ferramentas · ${data.name}`}
-          options={entry.id === 'bard' ? TOOLS.slice(-3) : TOOLS} selected={entry.tools} limit={count}
+          options={entry.id === 'bard' ? INSTRUMENTS : TOOLS} selected={entry.tools} limit={count}
           onChange={tools => patchEntry(entry.id, { tools })}/> : null;
       })}
       {details.tools.length > 0 && <p>Ferramentas · {details.tools.join(', ')}</p>}
@@ -437,6 +480,8 @@ function EquipmentStage({ build, details, patch }) {
     <div className="dnd24-card"><h3>Pacotes iniciais</h3>
       <Select label="Equipamento da classe" value={build.classKit} options={packages(starting?.kits)} onChange={classKit => patch({ classKit })}/>
       <Select label="Equipamento do antecedente" value={build.backgroundKit} options={packages(details.background?.kits)} onChange={backgroundKit => patch({ backgroundKit })}/>
+      {build.backgroundKit === '0' && details.background?.kitTools && <Select label="Jogo do pacote de antecedente"
+        value={build.backgroundKitTool} options={details.background.kitTools} onChange={backgroundKitTool => patch({ backgroundKitTool })}/>}
       {details.equipment.needsFocus && <Select label="Símbolo sagrado" value={build.focus} options={['Amuleto', 'Emblema', 'Relicário']}
         onChange={focus => patch({ focus })}/>}
     </div>
@@ -492,7 +537,7 @@ export default function Dnd2024Builder({ build, details, patch, setSpells, step,
     Classe: build.classes.map(entry => `${classData(entry).name} ${entry.level}`).join(' / '),
     Espécie: details.species?.name, Antecedente: details.background?.name,
     Atributos: ABILITY_KEYS.map(key => `${ABILITIES[key][1]} ${details.scores[key]}`).join(' · '),
-    Talentos: details.origins.map(labelFeat).join(', '), Perícias: `${details.proficientSkills.length} proficiências`,
+    Talentos: details.acquiredFeats.map(row => row.label).join(', '), Perícias: `${details.proficientSkills.length} proficiências`,
     Magias: spellOverview.size ? '' : 'Sem escolhas de magia',
     Equipamento: `${details.equipment.items.length} itens · ${details.equipment.coins} PO`, Sobre: [name, about.pronouns].filter(Boolean).join(' · '),
   };

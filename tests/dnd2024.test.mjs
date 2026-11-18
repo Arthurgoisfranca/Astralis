@@ -1,13 +1,119 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLASSES, SPELLS } from '../src/domain/dnd2024Catalog.mjs';
+import { BACKGROUNDS, CLASSES, FEATS, SPELLS, featInfo } from '../src/domain/dnd2024Catalog.mjs';
 import { BUILD_STAT, DATA_LIMIT, PLAY_STAT, buildDetails, changeHP, classEntry, demoGabriel, featureLevels, newAbilityRolls,
-  readBuild, readPlay, recover, rerollDndTest, resourceCaps, rollDamage, rollDndTest, skillBonus, spellChoices, storeCharacter } from '../src/domain/dnd2024Rules.mjs';
+  readBuild, readPlay, recover, rerollDndTest, resourceCaps, rollDamage, rollDndTest, skillBonus, spellChoices, storeCharacter,
+  updateStartingEquipment } from '../src/domain/dnd2024Rules.mjs';
 
 function rng(...values) {
   let i = 0;
   return () => values[i++] ?? 0.5;
 }
+
+test('o Livro do Jogador 2024 tem 75 talentos em quatro categorias e 16 antecedentes com dois pacotes', () => {
+  const rows = Object.values(FEATS);
+  const counts = Object.fromEntries(['origin', 'general', 'style', 'epic'].map(category => [category, rows.filter(row => row.category === category).length]));
+  assert.deepEqual(counts, { origin: 10, general: 43, style: 10, epic: 12 });
+  const kitGold = { acolyte: 8, artisan: 32, charlatan: 15, criminal: 16, entertainer: 11, farmer: 30, guard: 12, guide: 3,
+    hermit: 16, merchant: 22, noble: 29, sage: 8, sailor: 20, scribe: 23, soldier: 14, wayfarer: 16 };
+  assert.deepEqual(Object.keys(BACKGROUNDS).sort(), Object.keys(kitGold).sort());
+  for (const [id, row] of Object.entries(BACKGROUNDS)) {
+    assert.equal(featInfo(row.feat)?.category, 'origin');
+    assert.equal(new Set(row.abilities).size, 3, id);
+    assert.equal(new Set(row.skills).size, 2, id);
+    assert.ok(row.summary && (row.tool || row.tools?.length));
+    assert.deepEqual(row.kits.map(kit => kit.coins), [kitGold[id], 50], id);
+    assert.ok(row.kits[0].items.length && !row.kits[1].items.length);
+  }
+});
+
+test('antecedente concede o talento, proficiências, equipamento e recursos sem apagar itens da campanha', () => {
+  const { build, spells } = demoGabriel();
+  const previous = buildDetails(build, spells, 'Gabriel');
+  const nextBuild = { ...build, background: 'wayfarer', backgroundKitTool: 'Xadrez dracônico' };
+  const next = buildDetails(nextBuild, spells, 'Gabriel');
+  assert.ok(next.proficientSkills.includes('Stealth'));
+  assert.ok(next.tools.includes('Ferramentas de ladrão'));
+  assert.ok(!next.tools.includes('Xadrez dracônico'));
+  assert.equal(new Map(next.equipment.items).get('Xadrez dracônico'), 1);
+  assert.equal(resourceCaps(nextBuild, next).find(row => row.id === 'feat:lucky').max, 2);
+  const existing = readPlay({}, previous);
+  const changed = updateStartingEquipment({ ...existing, items: [...existing.items, ['Espelho da campanha', 1]] }, previous.equipment, next.equipment);
+  assert.ok(changed.items.some(([name]) => name === 'Espelho da campanha'));
+  assert.ok(changed.items.some(([name]) => name === 'Xadrez dracônico'));
+  assert.ok(!changed.items.some(([name]) => name === 'Book (Prayers)'));
+  assert.equal(changed.coins.gp, existing.coins.gp + 8);
+});
+
+test('talentos respeitam nível, pré-requisitos, armaduras e repetição e sobrevivem ao salvamento', () => {
+  const { build } = demoGabriel();
+  build.classes = [{ ...classEntry('wizard'), level: 19 }];
+  build.feats = {
+    'wizard-4': { name: 'Lightly Armored', values: ['dexterity'] },
+    'wizard-8': { name: 'Moderately Armored', values: ['dexterity'] },
+    'wizard-12': { name: 'Heavily Armored', values: ['constitution'] },
+    'wizard-16': { name: 'Resilient', values: ['constitution'] },
+    'wizard-19': { name: 'Boon of Fortitude', values: ['intelligence'] },
+  };
+  const details = buildDetails(build, {}, 'Gabriel');
+  assert.deepEqual([...details.armorTraining].sort(), ['heavy', 'light', 'medium', 'shield']);
+  assert.ok(details.saves.includes('constitution'));
+  assert.ok(!details.feats[0].options.includes('Heavily Armored'));
+  assert.ok(!details.feats[0].options.includes('Boon of Fortitude'));
+  assert.ok(details.feats.at(-1).options.includes('Boon of Spell Recall'));
+  assert.deepEqual(details.issues.Talentos, []);
+  const withoutFortitude = buildDetails({ ...build, feats: { ...build.feats, 'wizard-19': { name: 'Ability Score Improvement', values: ['intelligence', 'wisdom'] } } }, {}, 'Gabriel');
+  assert.equal(details.hp - withoutFortitude.hp, 40);
+  const saved = storeCharacter({}, build, {}, readPlay({}, details), details);
+  assert.deepEqual(readBuild(saved[BUILD_STAT]).feats['wizard-19'].values, ['intelligence']);
+  const invalid = buildDetails({ ...build, feats: { ...build.feats, 'wizard-8': { name: 'Lightly Armored', values: ['dexterity'] } } }, {});
+  assert.ok(invalid.issues.Talentos.some(issue => issue.includes('nível 8')));
+  assert.ok(!invalid.armorTraining.has('heavy'));
+});
+
+test('Humanos podem repetir Habilidoso, preservando escolhas antigas e separando as novas', () => {
+  const { build } = demoGabriel();
+  build.species = 'human';
+  build.background = 'charlatan';
+  build.humanFeat = 'Skilled';
+  build.skilled = ['Athletics', 'Medicine', 'Dados'];
+  build.featChoices = { 'origin:human': { selected: ['Arcana', 'Stealth', 'Flauta'] } };
+  const stored = readBuild(JSON.stringify(build));
+  const details = buildDetails(stored, {}, 'Gabriel');
+  assert.deepEqual(details.originRows.map(row => row.name), ['Skilled', 'Skilled']);
+  assert.deepEqual(details.issues.Talentos, []);
+  assert.ok(details.proficientSkills.includes('Athletics') && details.proficientSkills.includes('Arcana'));
+  assert.ok(details.tools.includes('Dados') && details.tools.includes('Flauta'));
+  const repeated = buildDetails({ ...stored, featChoices: { 'origin:human': { selected: ['Athletics', 'Flauta', 'Dados'] } } }, {});
+  assert.ok(repeated.issues.Talentos.some(issue => issue.includes('Humano')));
+});
+
+test('talentos de magia oferecem apenas escolas e rituais válidos e criam conjurações próprias', () => {
+  const { build } = demoGabriel();
+  build.classes = [{ ...classEntry('fighter'), subclass: 'Eldritch Knight', style: 'Defense', level: 16 }];
+  build.feats = {
+    'fighter-4': { name: 'Fey Touched', values: ['wisdom'] },
+    'fighter-6': { name: 'Shadow Touched', values: ['intelligence'] },
+    'fighter-8': { name: 'Ritual Caster', values: ['wisdom'] },
+    'fighter-12': { name: 'Elemental Adept', values: ['intelligence'] },
+    'fighter-14': { name: 'Elemental Adept', values: ['intelligence'] },
+    'fighter-16': { name: 'Archery', values: [] },
+  };
+  build.featChoices = { 'fighter-12': { selected: ['Fogo'] }, 'fighter-14': { selected: ['Frio'] } };
+  const spells = { 'fighter-4:feat-spell': ['Bless'], 'fighter-6:feat-spell': ['False Life'] };
+  const details = buildDetails(build, spells, 'Gabriel');
+  const fey = details.groups.find(row => row.id === 'fighter-4:feat-spell');
+  const ritual = details.groups.find(row => row.id === 'fighter-8:feat-spell');
+  assert.ok(fey.options.every(spell => spell.level === 1 && ['Divination', 'Enchantment'].includes(spell.school)));
+  assert.ok(ritual.options.every(spell => spell.level === 1 && spell.ritual));
+  assert.equal(ritual.count, details.pb);
+  assert.deepEqual(details.selected[fey.id], ['Bless']);
+  assert.equal(fey.freeId, 'fighter-4:chosen');
+  assert.ok(details.granted.some(row => row.name === 'Misty Step' && row.freeId === 'fighter-4:fixed'));
+  assert.ok(details.granted.some(row => row.name === 'Invisibility' && row.ability === 'intelligence'));
+  assert.ok(!details.feats.find(row => row.id === 'fighter-14').row.group.options.includes('Fogo'));
+  assert.ok(details.archery);
+});
 
 test('as 12 classes têm progressões até o nível 20 e as 48 subclasses do Livro do Jogador 2024', () => {
   assert.equal(Object.keys(CLASSES).length, 12);
