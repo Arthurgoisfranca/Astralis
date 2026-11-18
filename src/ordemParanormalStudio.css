@@ -1,4 +1,5 @@
 /* Ordem Paranormal II playtest: component-scoped presentation. No global theme overrides. */
+.modal-scrim:has(> .modal-card .op2-view){z-index:90}
 .modal-card:has(.op2-view){width:min(1270px,calc(100vw - 24px));max-height:97vh;padding:10px;border:1px solid #322745;background:#0d0914;color:#f3eefb;overflow:auto}
 .modal-card:has(.op2-view)>header{display:none}
 .sheet-studio:has(.op2-view){width:100%;max-width:none;min-height:0;padding:0;background:#0d0914;color:#f3eefb;--studio-bg:#0d0914;--studio-ink:#f3eefb;--studio-line:#483b57}
