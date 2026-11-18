@@ -85,6 +85,36 @@ export function Home({ inviteId, setInviteId, rooms, onCreate, onJoin, onResume,
   </div>;
 }
 
+const ROLE_NAMES = { gm: "Mestre", coGm: "Co-mestre", player: "Jogador", spectator: "Espectador" };
+function ManagePanel({ room, send }) {
+  const [role, setRole] = useState("player"), [ttlDays, setTtlDays] = useState("7"), [maxUses, setMaxUses] = useState(""), [busy, setBusy] = useState(false);
+  const members = (room.players || []).filter(player => !player.removed);
+  const invites = (room.invites || []).filter(invite => !invite.revoked);
+  const run = async (type, payload) => { setBusy(true); try { await send(type, payload); } finally { setBusy(false); } };
+  return <div className="manage-panel">
+    <div className="section-eyebrow">PARTICIPANTES</div>
+    <div className="member-list">{members.length ? members.map(member => <div key={member.id} className="member-row manage-row">
+      <span><b>{member.name}</b><small>{ROLE_NAMES[member.role] || "Jogador"}</small></span>
+      <div className="manage-actions">
+        <select aria-label={"Papel de " + member.name} value={member.role || "player"} disabled={busy} onChange={e => run("member:role", { id: member.id, role: e.target.value })}>
+          <option value="coGm">Co-mestre</option><option value="player">Jogador</option><option value="spectator">Espectador</option>
+        </select>
+        <button type="button" className="button quiet" disabled={busy} onClick={() => run("member:remove", { id: member.id })}>Remover</button>
+      </div>
+    </div>) : <p className="muted-copy">Ninguém entrou ainda.</p>}</div>
+    <div className="section-eyebrow">GERAR CONVITE</div>
+    <form className="invite-form" onSubmit={e => { e.preventDefault(); run("invite:create", { role, ttlDays: Number(ttlDays) || 0, maxUses: Number(maxUses) || 0 }); }}>
+      <select aria-label="Papel do convite" value={role} onChange={e => setRole(e.target.value)}><option value="player">Jogador</option><option value="coGm">Co-mestre</option><option value="spectator">Espectador</option></select>
+      <label>Validade (dias, 0 = sem prazo)<input type="number" min="0" max="90" value={ttlDays} onChange={e => setTtlDays(e.target.value)}/></label>
+      <label>Limite de usos (vazio = ilimitado)<input type="number" min="1" max="100" value={maxUses} onChange={e => setMaxUses(e.target.value)}/></label>
+      <button className="button secondary" disabled={busy}>Gerar convite</button>
+    </form>
+    {invites.length > 0 && <div className="invite-list">{invites.map(invite => <div key={invite.token} className="invite-row">
+      <span><b>{ROLE_NAMES[invite.role] || "Jogador"}</b><small>{invite.expiresAt ? "expira " + new Date(invite.expiresAt).toLocaleDateString("pt-BR") : "sem prazo"}{invite.maxUses ? ` · ${invite.uses}/${invite.maxUses} usos` : ""}</small></span>
+      <button type="button" className="button quiet" disabled={busy} onClick={() => run("invite:revoke", { token: invite.token })}>Revogar</button>
+    </div>)}</div>}
+  </div>;
+}
 export function Lobby({ room, presence, isGM, inviteUrl, send, identity, currentAvatar }) {
   const [form, setForm] = useState(room.campaign); const [copied, setCopied] = useState(false);
   // Enquanto o Mestre tem alterações não salvas, as atualizações da mesa não sobrescrevem o formulário.
@@ -122,6 +152,7 @@ export function Lobby({ room, presence, isGM, inviteUrl, send, identity, current
       <section className="surface members-panel"><div className="panel-heading"><div><div className="section-eyebrow">PRESENÇA</div><h2>Grupo na sala</h2></div><span className="count-badge">{presence.length}</span></div>
         <div className="member-list">{presence.map(member => <div key={member.id} className="member-row"><span className={"member-avatar " + (member.role === "gm" ? "gm-avatar" : "")}>{currentAvatar && identity?.userId===member.id?<img src={currentAvatar} alt={"Avatar de "+member.name} referrerPolicy="no-referrer"/>:member.name.slice(0, 1).toUpperCase()}</span><span><b>{member.name}</b><small>{member.role === "gm" ? "Mestre" : "Jogador"} · conectado</small></span><i className="presence-dot"></i></div>)}</div>
         {isGM && <div className="invite-box"><small>LINK DE CONVITE</small><div><code>{inviteUrl}</code><button className="button quiet" onClick={copyInvite}>{copied ? "Copiado" : "Copiar"}</button></div></div>}
+        {isGM && <ManagePanel room={room} send={send}/>}
       </section>
       <div className="lobby-right">
         {isGM && <section className="surface campaign-settings"><div className="section-eyebrow">DADOS DA CAMPANHA</div><form onSubmit={saveCampaign} className="compact-form campaign-edit">

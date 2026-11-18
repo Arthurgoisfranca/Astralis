@@ -105,9 +105,13 @@ function createState(input) {
     systemGuide: { text: "", consultations: [] }, gmShield: { notes: "", tracker: { chaos: 0, fear: 0, rolls: [] } }, lore: { text: "" }, npcs: [], handouts: [], gmDocs: [], pdfs: [],
     map: { image: "", name: "", visible: false, tokens: [], measurements: [], gridFeet: 5 },
     music: { playlist: [], currentId: "", playing: false, position: 0, startedAt: 0, volume: 0.65, loop: false, shuffle: false },
-    notes: { shared: "", private: {} }, journal: [], sessions: []
+    notes: { shared: "", private: {} }, journal: [], sessions: [], invites: []
   };
 }
+const ROOM_ROLES = ["gm", "coGm", "player", "spectator"];
+// Papel de gestão (mestre e co-mestre). Ações exclusivas do mestre usam requireOwner.
+const MANAGER_ROLES = ["gm", "coGm"];
+
 function normalizeState(input) {
   const state = input && typeof input === "object" ? input : {}, campaign = state.campaign || {};
   const base = createState({ title: campaign.title, system: campaign.system, gmName: campaign.gmName, totalSeats: campaign.totalSeats, availableSeats: campaign.availableSeats });
@@ -119,17 +123,40 @@ function normalizeState(input) {
     pdfs: Array.isArray(state.pdfs) ? state.pdfs : [], journal: Array.isArray(state.journal) ? state.journal : [],
     map: { ...base.map, ...(state.map || {}), tokens: Array.isArray(state.map?.tokens) ? state.map.tokens : [], measurements: Array.isArray(state.map?.measurements) ? state.map.measurements : [] },
     music: { ...base.music, ...(state.music || {}) }, notes: { ...base.notes, ...(state.notes || {}), private: { ...(state.notes?.private || {}) } },
-    sessions: Array.isArray(state.sessions) ? state.sessions : []
+    sessions: Array.isArray(state.sessions) ? state.sessions : [],
+    invites: (Array.isArray(state.invites) ? state.invites : []).map(normalizeInvite).filter(Boolean)
   };
+}
+function normalizeInvite(raw) {
+  if (!raw || typeof raw !== "object" || typeof raw.token !== "string") return null;
+  return {
+    token: raw.token, role: ROOM_ROLES.includes(raw.role) && raw.role !== "gm" ? raw.role : "player",
+    expiresAt: Number(raw.expiresAt) || 0, maxUses: Number.isInteger(raw.maxUses) && raw.maxUses > 0 ? raw.maxUses : 0,
+    uses: Math.max(0, Number(raw.uses) || 0), revoked: raw.revoked === true, createdAt: Number(raw.createdAt) || Date.now(),
+  };
+}
+// Convite utilizável agora? Devolve o motivo da recusa ou null.
+function inviteRejection(invite) {
+  if (!invite || invite.revoked) return "Convite inválido.";
+  if (invite.expiresAt && Date.now() > invite.expiresAt) return "Este convite expirou.";
+  if (invite.maxUses && invite.uses >= invite.maxUses) return "Este convite atingiu o limite de usos.";
+  return null;
+}
+function findUsableInvite(room, token) {
+  const invite = (room.state.invites || []).find(item => item.token === token);
+  return invite && !inviteRejection(invite) ? invite : null;
 }
 function identify(room, token) {
   if (token && token === room.gmToken) return { role: "gm", userId: "gm", name: room.state.campaign.gmName || "Mestre" };
-  const player = room.state.players.find(item => item.token === token);
-  return player ? { role: "player", userId: player.id, name: player.name } : null;
+  const player = room.state.players.find(item => item.token === token && !item.removed);
+  if (!player) return null;
+  const role = ROOM_ROLES.includes(player.role) && player.role !== "gm" ? player.role : "player";
+  return { role, userId: player.id, name: player.name };
 }
 function publicState(room, socketData) {
-  const isGM = socketData.role === "gm", state = room.state;
-  const players = state.players.map(({ token, ...player }) => ({ ...player }));
+  // Co-mestre enxerga como mestre; espectador, como jogador.
+  const isGM = MANAGER_ROLES.includes(socketData.role), state = room.state;
+  const players = state.players.filter(player => !player.removed).map(({ token, removed, ...player }) => ({ ...player }));
   const ownPrivate = isGM ? (state.notes.private.gm || "") : (state.notes.private[socketData.userId] || "");
   return {
     id: room.id, campaign: state.campaign, modules: state.modules,
@@ -146,6 +173,7 @@ function publicState(room, socketData) {
     pdfs: isGM ? state.pdfs : state.modules.pdfs ? state.pdfs.filter(item => item.ownerId === socketData.userId) : [],
     sessions: isGM || state.modules.sessions ? state.sessions : [],
     appointments: isGM || state.modules.agenda ? state.appointments : [],
+    invites: isGM ? (state.invites || []) : [],
     role: socketData.role, userId: socketData.userId, name: socketData.name
   };
 }
@@ -160,7 +188,17 @@ async function broadcastRoom(roomId) {
   for (const socket of sockets) socket.emit("room:state", publicState(room, socket.data));
   await roomPresence(roomId);
 }
-function requireGM(socket) { if (socket.data.role !== "gm") throw new Error("Essa ação é exclusiva do Mestre."); }
+// Ações de gestão da mesa: mestre e co-mestre.
+function requireGM(socket) { if (!MANAGER_ROLES.includes(socket.data.role)) throw new Error("Essa ação é exclusiva do Mestre."); }
+// Ações exclusivas do mestre: papéis, convites, remoção, encerrar.
+function requireOwner(socket) { if (socket.data.role !== "gm") throw new Error("Apenas o Mestre da mesa pode fazer isto."); }
+// Espectador não escreve nada.
+function denySpectator(socket) { if (socket.data.role === "spectator") throw new Error("Espectadores não podem alterar a mesa."); }
+function manageableMember(state, memberId) {
+  const member = state.players.find(item => item.id === memberId && !item.removed);
+  if (!member) throw new Error("Participante não encontrado.");
+  return member;
+}
 function moduleKey(value) { return ["agenda", "system", "characters", "lore", "npcs", "handouts", "maps", "music", "diary", "sessions", "gmDocs", "pdfs", "library"].includes(value); }
 function cleanCharacter(input, system) {
   const stats = input.stats && typeof input.stats === "object" ? Object.fromEntries(Object.entries(input.stats).slice(0, 160).map(([key, value]) => [text(key, 80), text(value, 2400)])) : {};
@@ -204,13 +242,13 @@ function applyAction(room, socket, action) {
     case "handout:reveal": requireGM(socket); { const item = state.handouts.find(handout => handout.id === payload.id); if (item) item.revealed = Boolean(payload.revealed); } break;
     case "handout:delete": requireGM(socket); state.handouts = state.handouts.filter(item => item.id !== payload.id); break;
     case "map:update": requireGM(socket); state.map = { image: imageData(payload.image, 8_000_000) || safeImageUrl(payload.image), name: text(payload.name, 120), visible: Boolean(payload.visible), tokens: Array.isArray(payload.tokens) ? payload.tokens.slice(0, 80) : state.map.tokens, measurements: Array.isArray(payload.measurements) ? payload.measurements.slice(0, 120) : state.map.measurements, gridFeet: Math.min(20, Math.max(1, Number(payload.gridFeet) || state.map.gridFeet || 5)) }; break;
-    case "map:token:add": {
+    case "map:token:add": denySpectator(socket); {
       const character = state.players.find(player => player.id === payload.ownerId);
       if (socket.data.role !== "gm" && (!character || character.id !== socket.data.userId)) throw new Error("Você só pode colocar seu próprio token.");
       const token = { id: text(payload.id, 60) || id(6), sourceId: text(payload.sourceId, 60), ownerId: text(payload.ownerId, 60), name: text(payload.name, 80), image: imageData(payload.image, 1_700_000) || safeImageUrl(payload.image), x: Math.min(100, Math.max(0, Number(payload.x) || 50)), y: Math.min(100, Math.max(0, Number(payload.y) || 50)) };
       state.map.tokens = state.map.tokens.filter(item => item.id !== token.id); state.map.tokens.push(token); break;
     }
-    case "map:token:move": {
+    case "map:token:move": denySpectator(socket); {
       const token = state.map.tokens.find(item => item.id === payload.id); if (!token) throw new Error("Token não encontrado.");
       if (socket.data.role !== "gm" && token.ownerId !== socket.data.userId) throw new Error("Você só pode mover seu próprio token.");
       token.x = Math.min(100, Math.max(0, Number(payload.x) || 0)); token.y = Math.min(100, Math.max(0, Number(payload.y) || 0)); break;
@@ -231,12 +269,12 @@ function applyAction(room, socket, action) {
       socket.data.name = name;
       break;
     }
-    case "character:save": {
-      const targetId = socket.data.role === "gm" ? text(payload.ownerId, 60) : socket.data.userId, player = state.players.find(item => item.id === targetId);
+    case "character:save": denySpectator(socket); {
+      const targetId = MANAGER_ROLES.includes(socket.data.role) ? text(payload.ownerId, 60) : socket.data.userId, player = state.players.find(item => item.id === targetId);
       if (!player) throw new Error("Jogador não encontrado."); player.character = cleanCharacter(payload.character || {}, state.campaign.system); break;
     }
-    case "notes:save": if (socket.data.role === "gm" && payload.shared !== undefined) state.notes.shared = text(payload.shared, 12000); state.notes.private[socket.data.role === "gm" ? "gm" : socket.data.userId] = text(payload.private, 12000); break;
-    case "journal:save": {
+    case "notes:save": denySpectator(socket); if (MANAGER_ROLES.includes(socket.data.role) && payload.shared !== undefined) state.notes.shared = text(payload.shared, 12000); state.notes.private[socket.data.role === "gm" ? "gm" : socket.data.userId] = payload.private !== undefined ? text(payload.private, 12000) : state.notes.private[socket.data.role === "gm" ? "gm" : socket.data.userId]; break;
+    case "journal:save": denySpectator(socket); {
       const timestamp = Date.now(), visibility = payload.visibility === "private" ? "private" : "public";
       const entry = { id: text(payload.id, 60) || id(6), authorId: socket.data.userId, author_id: socket.data.userId, authorName: socket.data.name, title: text(payload.title, 120), body: text(payload.body, 5000), visibility, is_private: visibility === "private", createdAt: timestamp, created_at: timestamp, updatedAt: timestamp };
       if (!entry.title || !entry.body) throw new Error("Preencha o título e a anotação.");
@@ -252,6 +290,31 @@ function applyAction(room, socket, action) {
     case "appointment:add": requireGM(socket); { const appointment = { id: id(6), title: text(payload.title, 120), date: text(payload.date, 20), time: text(payload.time, 20), location: text(payload.location, 160), notes: text(payload.notes, 2000) }; if (!appointment.title || !/^\d{4}-\d{2}-\d{2}$/.test(appointment.date)) throw new Error("Informe o título e uma data válida."); state.appointments.unshift(appointment); state.campaign.date = appointment.date; state.campaign.time = appointment.time; state.campaign.location = appointment.location; break; }
     case "appointment:delete": requireGM(socket); { const removed = state.appointments.find(item => item.id === payload.id); state.appointments = state.appointments.filter(item => item.id !== payload.id); if (removed && state.campaign.date === removed.date) { const next = state.appointments[0]; state.campaign.date = next ? next.date : ""; state.campaign.time = next ? next.time : ""; state.campaign.location = next ? next.location : ""; } break; }
     case "session:add": requireGM(socket); { const session = { id: id(6), date: text(payload.date, 30), title: text(payload.title, 120), summary: text(payload.summary, 4000), createdAt: Date.now() }; if (!session.date) throw new Error("Informe a data da sessão."); state.sessions.unshift(session); state.campaign.sessionCount = state.sessions.length; break; }
+    case "invite:create": {
+      requireOwner(socket);
+      const role = ROOM_ROLES.includes(payload.role) && payload.role !== "gm" ? payload.role : "player";
+      const ttlDays = Math.min(90, Math.max(0, Number(payload.ttlDays) || 7));
+      const maxUses = Number.isInteger(Number(payload.maxUses)) && Number(payload.maxUses) > 0 ? Math.min(100, Number(payload.maxUses)) : 0;
+      const invite = normalizeInvite({ token: id(24), role, expiresAt: ttlDays ? Date.now() + ttlDays * 86400000 : 0, maxUses, uses: 0, createdAt: Date.now() });
+      state.invites = [invite, ...(state.invites || [])].slice(0, 20);
+      // Compatibilidade: o convite mais recente de jogador vira o invite_token legado da sala.
+      if (role === "player") room.inviteToken = invite.token;
+      break;
+    }
+    case "invite:revoke": { requireOwner(socket); const invite = (state.invites || []).find(item => item.token === payload.token); if (invite) invite.revoked = true; break; }
+    case "member:role": {
+      requireOwner(socket);
+      const member = manageableMember(state, text(payload.id, 60));
+      const role = ROOM_ROLES.includes(payload.role) && payload.role !== "gm" ? payload.role : "player";
+      member.role = role; break;
+    }
+    case "member:remove": {
+      requireOwner(socket);
+      const member = manageableMember(state, text(payload.id, 60));
+      member.removed = true; member.token = "";
+      if (Number(state.campaign.availableSeats) < Number(state.campaign.totalSeats)) state.campaign.availableSeats = Number(state.campaign.availableSeats) + 1;
+      break;
+    }
     default: throw new Error("Ação desconhecida.");
   }
 }
@@ -425,6 +488,27 @@ app.get('/api/account/rooms', async (req,res) => {
     res.json({rooms});
   } catch(error){res.status(error.status || 500).json({error:error.message});}
 });
+// LGPD: exportar os próprios dados.
+app.get('/api/account/export', async (req, res) => {
+  try {
+    const user = await accountUser(req);
+    const { data: profile } = await supabase.from('user_profiles').select('display_name,avatar_url,updated_at').eq('id', user.id).maybeSingle();
+    const { data: rooms } = await supabase.from('account_rooms').select('room_id,role,display_name,created_at').eq('user_id', user.id);
+    res.setHeader('Content-Disposition', 'attachment; filename="astralis-meus-dados.json"');
+    res.json({ account: { id: user.id, email: user.email }, profile: profile || null, rooms: rooms || [] });
+  } catch (error) { res.status(error.status || 500).json({ error: error.message }); }
+});
+// LGPD: excluir a conta. As mesas permanecem para os outros participantes.
+app.post('/api/account/delete', async (req, res) => {
+  try {
+    const user = await accountUser(req);
+    await supabase.from('account_rooms').delete().eq('user_id', user.id);
+    await supabase.from('user_profiles').delete().eq('id', user.id);
+    const { error } = await supabase.auth.admin.deleteUser(user.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (error) { res.status(error.status || 500).json({ error: error.message }); }
+});
 
 app.post("/api/rooms", async (req, res) => {
   try {
@@ -445,11 +529,21 @@ app.post("/api/rooms/:roomId/join", async (req, res) => {
       const room = await readRoom(roomId);
       if (!room) return { status: 404, body: { error: "Sala não encontrada." } };
       if (!name) return { status: 400, body: { error: "Informe seu nome." } };
-      if (!invite || invite !== room.inviteToken) return { status: 403, body: { error: "Convite inválido. Use o link enviado pelo Mestre." } };
+      // Aceita convite estruturado (state.invites) ou o invite_token legado da sala.
+      const structured = findUsableInvite(room, invite);
+      const legacy = invite && invite === room.inviteToken && !(room.state.invites || []).some(item => item.token === invite);
+      if (!structured && !legacy) {
+        const known = (room.state.invites || []).find(item => item.token === invite);
+        return { status: 403, body: { error: known ? inviteRejection(known) : "Convite inválido. Use o link enviado pelo Mestre." } };
+      }
       if (room.state.campaign.availableSeats <= 0) return { status: 403, body: { error: "Não há vagas disponíveis nesta mesa." } };
-      const player = { id: id(8), token: id(24), name, character: null };
-      room.state.players.push(player); room.state.campaign.availableSeats = Math.max(0, room.state.campaign.availableSeats - 1); await saveRoom(room);
-      return { status: 200, roomId: room.id, body: { room: { id: room.id, title: room.state.campaign.title }, token: player.token, role: "player", userId: player.id, name: player.name } };
+      const role = structured ? structured.role : "player";
+      const player = { id: id(8), token: id(24), name, role, character: null };
+      room.state.players.push(player);
+      if (structured) structured.uses += 1;
+      if (role !== "spectator") room.state.campaign.availableSeats = Math.max(0, room.state.campaign.availableSeats - 1);
+      await saveRoom(room);
+      return { status: 200, roomId: room.id, body: { room: { id: room.id, title: room.state.campaign.title }, token: player.token, role, userId: player.id, name: player.name } };
     });
     res.status(outcome.status).json(outcome.body);
     if (outcome.status === 200) await broadcastRoom(outcome.roomId);
@@ -610,6 +704,10 @@ io.on("connection", socket => {
       applyAction(latest, socket, action); await saveRoom(latest); await synchronizeJournal(latest, action); await broadcastRoom(roomId);
       if (['music:control','music:playlist'].includes(action?.type)) publishAudio(roomId, latest.state.music);
       if (action?.type === 'profile:nickname') await roomPresence(roomId);
+      // Participante removido: derruba os sockets dele imediatamente.
+      if (action?.type === 'member:remove') { const removedId = String(action.payload?.id || ''); for (const s of await io.in(roomId).fetchSockets()) if (s.data.userId === removedId) s.disconnect(true); }
+      // Papel trocado: atualiza a identidade das conexões abertas daquele participante.
+      if (action?.type === 'member:role') { const member = latest.state.players.find(p => p.id === String(action.payload?.id || '')); if (member) for (const s of await io.in(roomId).fetchSockets()) if (s.data.userId === member.id) { s.data.role = member.role; s.emit('room:state', publicState(latest, s.data)); } }
     }).then(() => ack({ ok: true }), error => ack({ ok: false, error: error.message || "Não foi possível salvar." }));
   });
   socket.on("dice:roll", (request, callback) => {
