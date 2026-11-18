@@ -12,6 +12,7 @@ import "./characterStudio.css";
 
 const DND_2024_SYSTEM = "D&D 5.5E (2024)";
 const Dnd2024Studio = React.lazy(() => import("./Dnd2024Studio.jsx"));
+const DaggerheartStudio = React.lazy(() => import("./DaggerheartStudio.jsx"));
 
 const DICE=["d4","d6","d8","d10","d12","d20"];
 const DND_ABILITIES=[["strength","Força"],["dexterity","Destreza"],["constitution","Constituição"],["intelligence","Inteligência"],["wisdom","Sabedoria"],["charisma","Carisma"]];
@@ -174,10 +175,12 @@ class SheetErrorBoundary extends React.Component {
  render(){return this.state.failed?<div className="sheet-fallback" role="alert"><b>Não foi possível abrir esta seção da ficha.</b><p>Seus dados permanecem salvos. Feche e reabra a ficha ou tente outra aba.</p><button type="button" className="button secondary" onClick={()=>this.setState({failed:false})}>Tentar novamente</button><button type="button" className="button quiet" onClick={this.props.onClose}>Fechar</button></div>:this.props.children;}
 }
 export function CharacterStudio(props){return <SheetErrorBoundary onClose={props.onClose}><CharacterStudioContent {...props}/></SheetErrorBoundary>}
-function CharacterStudioContent({player,profile,system,upload,send,onClose,onSave}){
+function CharacterStudioContent({player,profile,system,upload,send,onClose,onSave,fear}){
  const old=player.character||{},[form,setForm]=useState({...old,name:old.name||(system==="Ordem Paranormal 2"?"Novo Agente":""),classLevel:old.classLevel||"",stats:sheetDefaults(system,old.stats||{}),appearance:old.appearance||"",inventory:old.inventory||"",notes:old.notes||"",token:old.token||"",pdf:old.pdf||null}),[tab,setTab]=useState("Resumo"),[tokenOpen,setTokenOpen]=useState(false),[saving,setSaving]=useState(false);
  const [dndClassic,setDndClassic]=useState(Boolean(player.character&&!old.stats?.dnd2024Build));
+ const [dhClassic,setDhClassic]=useState(Boolean(player.character&&!old.stats?.daggerheartBuild));
  const dnd2024=system===DND_2024_SYSTEM;
+ const daggerheartSheet=system==="Daggerheart";
  const blueprint=SYSTEM_SHEETS[system]||SYSTEM_SHEETS["Assimilação RPG"],stats=form.stats,tabs=["Resumo","Atributos","Recursos","Perícias","Detalhes","Rolagens"],parts=(Array.isArray(blueprint?.sections)?blueprint.sections:[]).filter(item=>item?.tab===tab);
  function setStat(key,value){setForm(old=>({...old,stats:{...old.stats,[key]:value}}));}
  async function save(event) {
@@ -223,6 +226,10 @@ function CharacterStudioContent({player,profile,system,upload,send,onClose,onSav
     try { localStorage.removeItem(`astralis:dnd2024:draft:${player.id}`); }
     catch { /* armazenamento local indisponível */ }
    }
+   if (daggerheartSheet && stats.daggerheartBuild) {
+    try { localStorage.removeItem(`astralis:daggerheart:draft:${player.id}`); }
+    catch { /* armazenamento local indisponível */ }
+   }
   } catch (error) {
    alert(error.message || "Não foi possível salvar a ficha.");
   } finally {
@@ -233,9 +240,12 @@ function CharacterStudioContent({player,profile,system,upload,send,onClose,onSav
   {dnd2024&&!dndClassic?<React.Suspense fallback={<p role="status">Abrindo a ficha de D&D 2024…</p>}>
    <Dnd2024Studio player={player} form={form} setForm={setForm} onTokenOpen={()=>setTokenOpen(true)}
     onClose={onClose} onClassic={form.stats.dnd2024Build?undefined:()=>setDndClassic(true)}/>
+  </React.Suspense>:daggerheartSheet&&!dhClassic?<React.Suspense fallback={<p role="status">Abrindo a ficha de Daggerheart…</p>}>
+   <DaggerheartStudio player={player} form={form} setForm={setForm} onTokenOpen={()=>setTokenOpen(true)} onClose={onClose}
+    onClassic={stats.daggerheartBuild?undefined:()=>setDhClassic(true)} send={send} fear={fear}/>
   </React.Suspense>:system==="Ordem Paranormal 2"?<OrdemParanormalStudio player={player} form={form} setForm={setForm} stats={stats} setStat={setStat} onTokenOpen={()=>setTokenOpen(true)}/>:<>
   <div className="studio-identity"><div className="studio-portrait">{form.token?<img src={form.token} alt="Retrato"/>:<span>{(form.name||player.name||"?").slice(0,1).toUpperCase()}</span>}<button type="button" onClick={()=>setTokenOpen(true)}>Retrato</button></div><div className="studio-title-fields"><span className="studio-system">{system}</span><input className="character-name-input" required placeholder="Nome do personagem" value={form.name} onChange={e=>setForm(old=>({...old,name:e.target.value}))}/><input className="character-class-input" placeholder="Classe, nível ou conceito" value={form.classLevel} onChange={e=>setForm(old=>({...old,classLevel:e.target.value}))}/><p>{blueprint.notice}</p></div>{form.pdf&&<span className="studio-pdf">PDF · {form.pdf.name}</span>}</div>
-  <nav className="studio-tabs" aria-label="Seções da ficha">{tabs.map(item=><button type="button" key={item} className={tab===item?"selected":""} onClick={()=>setTab(item)}>{item}</button>)}{dnd2024&&<button type="button" onClick={()=>setDndClassic(false)}>Abrir criador 2024</button>}</nav>
+  <nav className="studio-tabs" aria-label="Seções da ficha">{tabs.map(item=><button type="button" key={item} className={tab===item?"selected":""} onClick={()=>setTab(item)}>{item}</button>)}{dnd2024&&<button type="button" onClick={()=>setDndClassic(false)}>Abrir criador 2024</button>}{daggerheartSheet&&<button type="button" onClick={()=>setDhClassic(false)}>Abrir criador Daggerheart</button>}</nav>
   {tab==="Rolagens"?(system===VAMPIRE_ALPHA2?<VampireAlpha2Roller stats={stats} onStatChange={setStat}/>:<SkillCheck system={system} stats={stats} send={send} playerName={form.name||player.name} onStatChange={setStat}/>):<div className="studio-sheet-body">{parts.map((part,index)=><section className="studio-section" key={part.title+"-"+index}><header><span>{part.tab}</span><h3>{part.title}</h3></header><div className="studio-fields">{(Array.isArray(part?.fields)?part.fields:[]).filter(field=>field&&typeof field.key==="string").map(field=><SheetField key={field.key} field={field} stats={stats} value={field.key==="appearance"?form.appearance:field.key==="notes"?form.notes:stats[field.key]} onChange={value=>field.key==="appearance"?setForm(old=>({...old,appearance:value})):field.key==="notes"?setForm(old=>({...old,notes:value})):setStat(field.key,value)}/>)}</div></section>)}{system==="Cairn 2e"&&tab==="Recursos"&&<CairnInventory stats={stats} onStatChange={setStat}/>}
   {tab==="Detalhes"&&system!==VAMPIRE_ALPHA2&&<SheetArsenal system={system} stats={stats} send={send} playerName={form.name||player.name}/>}
   {tab==="Detalhes"&&system===VAMPIRE_ALPHA2&&<p className="muted-copy">Armas Alpha 2.0: o dano base registrado é somado à margem de sucesso do ataque, conforme o Player Packet (conflito físico). Use Fighting ou Shooting no rolador; o Narrador resolve defesa, mitigação e efeitos.</p>}
