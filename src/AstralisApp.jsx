@@ -1,13 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import AudioCenter from "./AudioCenter.jsx";
 import SystemConsultations from "./SystemConsultations.jsx";
 import AccountPanel from "./AccountPanel.jsx";
 import { MODULES, Home, Lobby } from "./AppShell.jsx";
 import { sha256Hex } from "./SharedTools.jsx";
-import { Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, Music, NPCs, PDFWorkshop, Sessions, SystemGuide, Characters, Workbench } from "./CampaignModules.jsx";
+import { Agenda, CommunityLibrary, Diary, GMDocuments, GMQuickShield, GMShield, Handouts, Lore, Maps, NPCs, PDFWorkshop, Sessions, Characters, Workbench } from "./CampaignModules.jsx";
 
-export const ThemeContext=createContext({theme:'dark',toggleTheme:()=>{}});
+const ThemeContext=createContext({theme:'dark',toggleTheme:()=>{}});
 function ThemeProvider({children}){
  const [theme,setTheme]=useState(()=>{try{return localStorage.getItem('mesa-dados:theme')==='light'?'light':'dark';}catch{return 'dark';}});
  useEffect(()=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark');document.documentElement.classList.toggle('light',theme==='light');document.documentElement.style.colorScheme=theme;try{localStorage.setItem('mesa-dados:theme',theme);}catch{}},[theme]);

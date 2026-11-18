@@ -1,7 +1,7 @@
 import React,{useState} from "react";
 import {Modal,TokenMaker,makeId} from "./SharedTools.jsx";
 import {buildCharacterSheet} from "./domain/characterSheets.ts";
-import {callOfCthulhuThresholds,daggerheartDamage,isWithinDamageThresholds,vampireDicePool} from "./domain/sheetCalculations.ts";
+import {callOfCthulhuThresholds,daggerheartDamage,isWithinDamageThresholds} from "./domain/sheetCalculations.ts";
 import {SYSTEM_SHEETS,sheetDefaults,DND_SKILLS,DND_SKILL_ABILITY,COC_SKILLS,V5_ATTRIBUTES,V5_PHYSICAL_SKILLS,V5_SOCIAL_MENTAL_SKILLS,parseSkillMap,cocBaseValue,cocSkillValues,dndSkillBonus,v5SkillDots} from "./systemSheetBlueprints.js";
 import {cairnSlots,cairnDamage,CAIRN_SCARS} from "./domain/manualRules.mjs";
 import {VAMPIRE_ALPHA2,VAMPIRE_V5_LEGACY,ALPHA_ATTRIBUTES,ALPHA_SKILLS,alphaResources,alphaTakingHalf} from "./domain/vampireAlpha2.mjs";
@@ -85,7 +85,7 @@ function VampireAlpha2Roller({stats,onStatChange,roll}){
 function SkillCheck({system,stats={},roll}){
  const [rolling,setRolling]=useState(false),[dndSkill,setDndSkill]=useState(""),[cocSkill,setCocSkill]=useState(""),[v5Attribute,setV5Attribute]=useState(""),[v5Skill,setV5Skill]=useState("");
  const [result,setResult]=useState(null),[bonus,setBonus]=useState("0"),[difficulty,setDifficulty]=useState(system.startsWith("Vampire")?"1":system==="Ordem Paranormal 2"?"7":"12"),[target,setTarget]=useState("50"),[pool,setPool]=useState("6"),[attribute,setAttribute]=useState("0"),[skillDie,setSkillDie]=useState("d6"),[attributeDie,setAttributeDie]=useState("d6"),[status,setStatus]=useState("");
- const [advantage,setAdvantage]=useState("normal"),[dndKind,setDndKind]=useState("check"),[proficiency,setProficiency]=useState("0"),[attributeScore,setAttributeScore]=useState("10"),[painPenalty,setPainPenalty]=useState(false),[threat,setThreat]=useState("20"),[exposure,setExposure]=useState("0"),[cairnAbility,setCairnAbility]=useState("str"),[hasPavor,setHasPavor]=useState(false),[pavorDie,setPavorDie]=useState("d6");
+ const [advantage,setAdvantage]=useState("normal"),[dndKind,setDndKind]=useState("check"),[proficiency,setProficiency]=useState("0"),[attributeScore,setAttributeScore]=useState("10"),[painPenalty,setPainPenalty]=useState(false),[cairnAbility,setCairnAbility]=useState("str"),[hasPavor,setHasPavor]=useState(false),[pavorDie,setPavorDie]=useState("d6");
  const isDnd=system.startsWith("D&D"), isVampire=system.startsWith("Vampire");
  const orderSkills=parseMap(stats.pericias),[selectedSkill,setSelectedSkill]=useState('');
  const orderAttributeBySkill={'Acrobacia':'physical','Animais':'emotion','Aptidão':'mind','Atletismo':'physical','Bruxaria':'mind','Crime':'physical','Disciplina':'emotion','Enganação':'emotion','Furtividade':'physical','Intimidar':'emotion','Intuição':'emotion','Inspecionar':'mind','Luta':'physical','Medicina':'mind','Metalurgia':'mind','Percepção':'mind','Persuasão':'emotion','Pontaria':'physical','Sobrevivência':'mind','Vigor':'physical'};

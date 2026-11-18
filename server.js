@@ -270,7 +270,6 @@ function recordRoll(state, system, actor, result) {
   } else throw new Error("Sistema de rolagem não suportado.");
   tracker.rolls = ([{ id: id(6), system, actor: text(actor, 80), summary, dice: result.dice, createdAt: Date.now() }, ...(tracker.rolls || [])]).slice(0, 30);
 }
-function fileIdentity(room, token) { return identify(room, token); }
 function readFileHead(file, length = 64) {
   try { const handle = fs.openSync(file, "r"); try { const buffer = Buffer.alloc(length); return buffer.subarray(0, fs.readSync(handle, buffer, 0, length, 0)); } finally { fs.closeSync(handle); } }
   catch (_) { return Buffer.alloc(0); }
@@ -458,7 +457,7 @@ app.post("/api/rooms/:roomId/join", async (req, res) => {
 });
 app.post("/api/rooms/:roomId/uploads/start", async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
+    const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const input = req.body || {}, scope = ["public", "private", "community"].includes(input.scope) ? input.scope : "public", kind = text(input.kind, 40);
     const fileName = text(input.fileName, 220) || "arquivo", mime = text(input.mime, 160), size = Math.trunc(Number(input.size));
@@ -478,13 +477,13 @@ app.post("/api/rooms/:roomId/uploads/start", async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message || "Não foi possível iniciar o envio." }); }
 });
 app.get("/api/rooms/:roomId/uploads/:uploadId", async (req, res) => {
-  const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100)), session = uploadSessions.get(req.params.uploadId);
+  const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100)), session = uploadSessions.get(req.params.uploadId);
   if (!room || !actor || !session || session.roomId !== room.id || session.userId !== actor.userId) return res.status(404).json({ error: "Envio não encontrado." });
   res.json({ uploadId: session.id, chunkSize: uploadChunkSize, nextIndex: session.nextIndex, chunkCount: session.chunkCount, receivedChunks: session.chunks });
 });
 app.put("/api/rooms/:roomId/uploads/:uploadId/chunks/:index", express.raw({ type: "*/*", limit: "6mb" }), async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100)), session = uploadSessions.get(req.params.uploadId);
+    const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100)), session = uploadSessions.get(req.params.uploadId);
     if (!room || !actor || !session || session.roomId !== room.id || session.userId !== actor.userId) return res.status(404).json({ error: "Envio não encontrado." });
     if (Date.now() - session.createdAt > 6 * 60 * 60 * 1000) { fs.rmSync(session.directory, { recursive: true, force: true }); uploadSessions.delete(session.id); return res.status(410).json({ error: "O envio expirou. Selecione o arquivo novamente." }); }
     const index = Number(req.params.index), buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0), expectedSize = Math.min(uploadChunkSize, session.size - index * uploadChunkSize);
@@ -507,7 +506,7 @@ app.put("/api/rooms/:roomId/uploads/:uploadId/chunks/:index", express.raw({ type
   } catch (error) { res.status(500).json({ error: error.message || "Não foi possível gravar o bloco." }); }
 });
 app.post("/api/rooms/:roomId/uploads/:uploadId/complete", async (req, res) => {
-  const session = uploadSessions.get(req.params.uploadId), room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
+  const session = uploadSessions.get(req.params.uploadId), room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100));
   if (!room || !actor || !session || session.roomId !== room.id || session.userId !== actor.userId) return res.status(404).json({ error: "Envio não encontrado." });
   if (session.nextIndex !== session.chunkCount || session.chunks.reduce((sum, chunk) => sum + chunk.size, 0) !== session.size) return res.status(409).json({ error: "Ainda faltam blocos para concluir o envio." });
   // Sessões retomadas do disco podem ser anteriores às regras atuais: confere papel e conteúdo de novo.
@@ -523,7 +522,7 @@ app.post("/api/rooms/:roomId/uploads/:uploadId/complete", async (req, res) => {
 });
 app.post("/api/rooms/:roomId/uploads", express.raw({ type: "*/*", limit: "31mb" }), async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
+    const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const scope = ["public", "private", "community"].includes(req.query.scope) ? req.query.scope : "public";
     const mime = text(req.headers["content-type"], 160).split(";")[0];
@@ -539,7 +538,7 @@ app.post("/api/rooms/:roomId/uploads", express.raw({ type: "*/*", limit: "31mb" 
 });
 app.post("/api/rooms/:roomId/files/signed-url", async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
+    const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const bucket = text(req.body && req.body.bucket, 80), filePath = text(req.body && req.body.path, 600), segments = safeStoragePath(room.id, filePath);
     if (!Object.values(buckets).includes(bucket) || !segments) return res.status(400).json({ error: "Arquivo inválido." });
@@ -551,7 +550,7 @@ app.post("/api/rooms/:roomId/files/signed-url", async (req, res) => {
 app.get("/api/library", async (_req, res) => { try { res.json({ items: (await listLibrary()).map(libraryShape) }); } catch (error) { res.status(500).json({ error: error.message }); } });
 app.post("/api/rooms/:roomId/library", async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.headers["x-room-token"], 100));
+    const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.headers["x-room-token"], 100));
     if (!room || !actor) return res.status(401).json({ error: "Acesso à sala inválido." });
     const saved = req.body || {};
     const librarySegments = safeStoragePath(room.id, text(saved.path, 600));
@@ -563,7 +562,7 @@ app.post("/api/rooms/:roomId/library", async (req, res) => {
 });
 app.get("/api/rooms/:roomId/private-file", async (req, res) => {
   try {
-    const room = await readRoom(req.params.roomId), actor = room && fileIdentity(room, text(req.query.token, 100));
+    const room = await readRoom(req.params.roomId), actor = room && identify(room, text(req.query.token, 100));
     const filePath = text(req.query.path, 600), segments = room && safeStoragePath(room.id, filePath);
     if (!room || !actor || !segments || (actor.role !== "gm" && actor.userId !== segments[1])) return res.status(403).end();
     if (supabase) {

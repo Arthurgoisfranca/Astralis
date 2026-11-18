@@ -1,7 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ImageDrop, Modal, TokenMaker, makeId, readImage, resizeImage } from "./SharedTools.jsx";
-
-
+import { useEffect, useRef, useState } from "react";
+import { ImageDrop, makeId, resizeImage } from "./SharedTools.jsx";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { SYSTEMS, systemProfile, systemLabel } from "./RpgSystems.js";
@@ -80,19 +78,6 @@ export function Workbench({ room, presence = [], isGM, onOpen }) {
     </div>
   </div>;
 }
-export function SystemGuide({ value, isGM, send }) {
-  const [text, setText] = useState(value || ""), [saving, setSaving] = useState(false), [saved, setSaved] = useState(false);
-  useEffect(() => { setText(value || ""); setSaved(false); }, [value]);
-  async function save() {
-    setSaving(true); setSaved(false);
-    try {
-      const result = await send("system:update", { value: text });
-      if (result?.ok) setSaved(true);
-    } finally { setSaving(false); }
-  }
-  return <div className="view-stack"><ModuleHeader eyebrow="REGRAS DA CAMPANHA" title="Consulta do sistema" description="Regras da mesa, referências rápidas e combinações do grupo."/>
-    <section className="surface writing-surface">{isGM ? <><textarea value={text} onChange={event => { setText(event.target.value); setSaved(false); }} placeholder="Anote regras da casa, referências úteis e acordos do grupo."/><div className="save-row"><button className="button primary" disabled={saving} onClick={save}>{saving ? "Salvando…" : "Salvar consulta"}</button>{saved && <span className="muted-copy" role="status">Salvo na sala</span>}</div></> : <div className="lore-read">{value || "O Mestre ainda não adicionou referências do sistema."}</div>}</section></div>;
-}
 export function Lore({ value, isGM, send }) {
   const [text, setText] = useState(value || "");
   useEffect(() => setText(value || ""), [value]);
@@ -165,7 +150,7 @@ export function Maps({ value, room, identity, isGM, send, upload }) {
     finally { setBusy(false); }
   }
   const measurements = value.measurements || [], tokens = value.tokens || [];
-  function measurementShape(item, preview = false) {
+  function measurementShape(item) {
     const dx = item.x2 - item.x1, dy = item.y2 - item.y1, radius = Math.hypot(dx, dy);
     if (item.type === "line") return <g key={item.id || "preview"}><line x1={item.x1} y1={item.y1} x2={item.x2} y2={item.y2}/><text x={(item.x1 + item.x2) / 2} y={(item.y1 + item.y2) / 2 - 2}>{measureLabel(item)}</text></g>;
     if (item.type === "circle") return <g key={item.id || "preview"}><circle cx={item.x1} cy={item.y1} r={radius}/><text x={item.x1 + radius} y={item.y1}>{measureLabel(item)}</text></g>;
@@ -211,58 +196,10 @@ export function Maps({ value, room, identity, isGM, send, upload }) {
     {isGM && <section className="surface tactical-toolbar"><div className="tool-options">{[["pan", "Mover mapa"], ["line", "Régua"], ["circle", "Raio"], ["cone", "Cone"], ["square", "Quadrado"]].map(([key, label]) => <button key={key} className={"button " + (tool === key ? "primary" : "quiet")} onClick={() => setTool(key)}>{label}</button>)}</div><span>Uma quadrícula equivale a {gridFeet} ft · {Math.round(gridFeet * .3048 * 10) / 10} m</span><button className="text-action danger" onClick={() => send("map:measure:clear", {})}>Limpar medições</button></section>}
     <div className="token-carousel surface"><div className="section-eyebrow">TOKENS DA CENA</div>{candidates.length ? candidates.map(candidate => <button key={candidate.sourceId} draggable onDragStart={event => event.dataTransfer.setData("text/token", candidate.sourceId)} className={"carousel-token " + (selected?.sourceId === candidate.sourceId ? "selected" : "")} onClick={() => setSelected(candidate)}><img src={candidate.image} alt=""/><span>{candidate.name}</span></button>) : <span className="muted-copy">Crie tokens nas fichas ou adicione uma imagem ao NPC.</span>}</div>
     {image ? <div ref={stageRef} className={"map-stage tactical-map " + (drag || moving ? "dragging" : "")} onWheel={event => { event.preventDefault(); setZoom(z => Math.max(1, Math.min(3, z + (event.deltaY < 0 ? .1 : -.1)))); }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDragOver={event => event.preventDefault()} onDrop={dropToken}>
-      <div className="map-board" style={{ width:fitted.width, height:fitted.height, left:"50%",top:"50%", transform: `translate(calc(-50% + ${pan.x}px),calc(-50% + ${pan.y}px)) scale(${zoom})` }} ><img className="map-image" src={image} alt={name}/><svg className="measure-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">{measurements.map(item => measurementShape(item))}{drawing && measurementShape(drawing, true)}</svg>
+      <div className="map-board" style={{ width:fitted.width, height:fitted.height, left:"50%",top:"50%", transform: `translate(calc(-50% + ${pan.x}px),calc(-50% + ${pan.y}px)) scale(${zoom})` }} ><img className="map-image" src={image} alt={name}/><svg className="measure-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">{measurements.map(item => measurementShape(item))}{drawing && measurementShape(drawing)}</svg>
         {tokens.map(token => { const moved = moving?.id === token.id ? moving : token; return <button data-token-id={token.id} key={token.id} className="map-token" style={{ left: moved.x + "%", top: moved.y + "%" }} title={token.name}><img src={token.image} alt=""/><span>{token.name}</span>{isGM && <i onClick={event => { event.stopPropagation(); send("map:token:delete", { id: token.id }); }}>×</i>}</button>; })}
       </div><div className="map-zoom" role="group" aria-label="Controles do mapa"><button type="button" onClick={()=>setZoom(z=>Math.max(1,z-.2))} aria-label="Reduzir zoom">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>setZoom(z=>Math.min(3,z+.2))} aria-label="Aumentar zoom">+</button><button type="button" onClick={()=>{setZoom(1);setPan({x:0,y:0});}}>Enquadrar</button></div>
     </div> : <Empty>{isGM ? "Carregue um mapa para abrir a área tática." : "O Mestre ainda não projetou um mapa."}</Empty>}
-  </div>;
-}
-function youtubeId(url) {
-  try { const parsed = new URL(url); if (parsed.hostname.includes("youtu.be")) return parsed.pathname.slice(1); if (parsed.hostname.includes("youtube.com")) return parsed.searchParams.get("v") || parsed.pathname.split("/").filter(Boolean).pop(); } catch (_) {}
-  return "";
-}
-export function Music({ value, isGM, send }) {
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-  const [audioReady, setAudioReady] = useState(false), [sceneVolume, setSceneVolume] = useState(value.volume ?? .65);
-  const audioRef = useRef(null), iframeRef = useRef(null);
-  const track = value.playlist.find(item => item.id === value.currentId), video = track && youtubeId(track.url);
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !track || video) return;
-    audio.volume = Math.min(1, Math.max(0, Number(value.volume ?? .65)));
-    if (audio.src !== track.url) audio.src = track.url;
-    const position = value.playing && value.startedAt ? value.position + Math.max(0, (Date.now() - value.startedAt) / 1000) : value.position;
-    try { audio.currentTime = position; } catch (_) {}
-    if (value.playing && audioReady) audio.play().catch(() => {}); else audio.pause();
-  }, [track && track.id, value.startedAt, value.playing, value.volume, video, audioReady]);
-  useEffect(() => {
-    if (!video || !iframeRef.current) return;
-    const timer = setTimeout(() => {
-      const target = iframeRef.current?.contentWindow;
-      if (!target) return;
-      const command = (func, args = []) => target.postMessage(JSON.stringify({ event: "command", func, args }), "*");
-      command("setVolume", [Math.round(Math.min(1, Math.max(0, Number(value.volume ?? .65))) * 100)]);
-      if (value.playing) {
-        const position = value.position + (value.startedAt ? Math.max(0, (Date.now() - value.startedAt) / 1000) : 0);
-        command("seekTo", [position, true]); command("playVideo");
-      } else command("pauseVideo");
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [video, value.playing, value.startedAt, value.position, value.volume]);
-  function control(playing, nextTrack = track, nextVolume = value.volume) {
-    if (!nextTrack) return;
-    const switching = nextTrack.id !== track?.id;
-    const position = switching ? 0 : audioRef.current && !video ? audioRef.current.currentTime : value.playing && value.startedAt ? value.position + Math.max(0, (Date.now() - value.startedAt) / 1000) : value.position;
-    send("music:control", { trackId: nextTrack.id, playing, position, volume: nextVolume });
-  }
-  const youtubeUrl = video ? "https://www.youtube-nocookie.com/embed/" + video + "?enablejsapi=1&origin=" + encodeURIComponent(location.origin) + "&controls=0&disablekb=1&playsinline=1" : "";
-  return <div className="view-stack"><ModuleHeader eyebrow="TRILHA SONORA" title="Música da mesa" description="A playlist do Mestre é atualizada para todos no lobby."/>
-    {isGM && <form className="surface music-add" onSubmit={event => { event.preventDefault(); send("music:playlist", { tracks: [...value.playlist, { id: makeId(), title, url }] }); setTitle(""); setUrl(""); }}>
-      <input required placeholder="Nome da faixa ou cena" value={title} onChange={event => setTitle(event.target.value)}/><input required type="url" placeholder="URL de áudio ou YouTube" value={url} onChange={event => setUrl(event.target.value)}/><button className="button secondary">Adicionar à playlist</button>
-    </form>}
-    <section className="surface player-surface">{track ? <><div className="track-now"><small>FAIXA DA SALA</small><h2>{track.title}</h2><span>{value.playing ? "Reproduzindo" : "Pausada"} · {value.playlist.length} faixas</span></div>{video ? <iframe ref={iframeRef} key={track.id} className="youtube-frame" title={track.title} src={youtubeUrl} allow="autoplay; encrypted-media; picture-in-picture" onLoad={() => { const target = iframeRef.current?.contentWindow; if (target) target.postMessage(JSON.stringify({ event: "command", func: value.playing ? "playVideo" : "pauseVideo", args: [] }), "*"); }}/> : <><audio ref={audioRef}/>{!audioReady && <button className="button quiet" onClick={() => { const audio = audioRef.current; if (audio) { const position = value.playing && value.startedAt ? value.position + Math.max(0, (Date.now() - value.startedAt) / 1000) : value.position; audio.volume = Number(value.volume ?? .65); audio.currentTime = position; if (value.playing) audio.play().catch(() => {}); else audio.pause(); setAudioReady(true); }}}>Ativar áudio neste dispositivo</button>}</>}{isGM && <div className="player-controls"><button className="button primary" onClick={() => control(!value.playing)}>{value.playing ? "Pausar" : "Reproduzir"}</button><button className="button quiet" onClick={() => { const index = value.playlist.findIndex(item => item.id === value.currentId), next = value.playlist[(index + 1) % value.playlist.length]; control(true, next); }}>Próxima faixa</button><label className="scene-volume">Volume da cena<input aria-label="Volume da cena" type="range" min="0" max="100" value={Math.round(sceneVolume * 100)} onChange={event => setSceneVolume(Number(event.target.value) / 100)} onPointerUp={() => control(value.playing, track, sceneVolume)} onKeyUp={() => control(value.playing, track, sceneVolume)}/></label></div>}</> : <Empty>Adicione uma faixa para iniciar a trilha.</Empty>}</section>
-    {value.playlist.length > 0 && <section className="surface playlist"><div className="section-eyebrow">PLAYLIST</div>{value.playlist.map((item, index) => <div className={"playlist-row " + (item.id === value.currentId ? "current" : "")} key={item.id}><span className="track-index">{String(index + 1).padStart(2, "0")}</span><b>{item.title}</b>{isGM && <button className="text-action" onClick={() => control(true, item)}>Tocar</button>}</div>)}</section>}
   </div>;
 }
 export function Diary({ value, journal = [], isGM, identity, send }) {
@@ -398,7 +335,6 @@ function parseSuggestions(text, profile) {
 }
 
 export function PDFWorkshop({ items = [], room, identity, isGM, system, upload, getSignedUrl, send }) {
-  const own = room.players.find(player => player.id === identity.userId);
   const [ownerId, setOwnerId] = useState(isGM ? (room.players[0]?.id || "") : identity.userId);
   const [active, setActive] = useState(null), [buffer, setBuffer] = useState(null), [viewerUrl, setViewerUrl] = useState("");
   const [fields, setFields] = useState([]), [values, setValues] = useState({}), [textContent, setTextContent] = useState("");

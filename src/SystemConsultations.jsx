@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import {useEffect, useState} from 'react';
 export default function SystemConsultations({value, isGM, send}) {
   const consultations = value?.consultations || [];
   const legacy = value?.text ? [{id:'legacy', title:'Regras da campanha (legado)', body:value.text,active:true}] : [];

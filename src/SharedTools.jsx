@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const makeId = () => crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
 const SHA256_ROUND = new Uint32Array([

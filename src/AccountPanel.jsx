@@ -1,9 +1,9 @@
-import React, {useEffect, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {createClient} from '@supabase/supabase-js';
 import {resizeImage,readImage,TokenMaker} from './SharedTools.jsx';
 const url=import.meta.env.VITE_SUPABASE_URL;
 const key=import.meta.env.VITE_SUPABASE_ANON_KEY;
-export const accountClient = url && key ? createClient(url,key, {auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}}) : null;
+const accountClient = url && key ? createClient(url,key, {auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}}) : null;
 export default function AccountPanel({session, onSession, children}) {
   const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState('login'),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
   const [profileOpen,setProfileOpen]=useState(false),[authLoading,setAuthLoading]=useState(!!accountClient),[newPassword,setNewPassword]=useState(""),[displayName,setDisplayName]=useState(''),[avatarUrl,setAvatarUrl]=useState(''),[avatarSource,setAvatarSource]=useState(null);

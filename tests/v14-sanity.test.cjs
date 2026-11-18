@@ -20,8 +20,8 @@ test('character editor inputs and skill changes call setForm, not undefined set'
 });
 test('audio player remains mounted outside conditional tab', () => {
   const app=read('src/AstralisApp.jsx');
-  assert.match(app,/\<AudioCenter .*visible=\{tab === "music"\}/);
-  assert.match(read('src/AudioCenter.jsx'),/\<audio ref=\{audioRef\}/);
+  assert.match(app,/<AudioCenter .*visible=\{tab === "music"\}/);
+  assert.match(read('src/AudioCenter.jsx'),/<audio ref=\{audioRef\}/);
   for (const action of ['music:playlist','music:control','setQueue','chooseNext','commitSeek']) assert.ok(read('src/AudioCenter.jsx').includes(action));
 });
 test('server enforces GM for playlist and consults and isolates private journals', () => {

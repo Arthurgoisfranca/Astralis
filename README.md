@@ -36,7 +36,7 @@ O servidor Node entrega o front-end compilado e também atende a API e as conex�
 ├── vite.config.js
 ├── render.yaml
 ├── scripts/
-│   ├── startDevServer.js
+│   ├── dev.js
 │   └── migrateSupabaseData.js
 ├── src/
 │   ├── main.jsx

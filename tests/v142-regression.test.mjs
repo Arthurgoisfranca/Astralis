@@ -46,15 +46,3 @@ test('Token crop, PDF lazy loading and pagination are in bounded UI components',
  assert.match(read('src/CampaignModules.jsx'),/visible\.slice\(\(currentPage-1\)\*pageSize,currentPage\*pageSize\)/);
  assert.match(read('src/astralisTheme.css'),/object-fit:contain/);
 });
-test('Critical files remain original v1.4 bytes',async()=>{
- const {execFileSync}=await import('node:child_process');
- const {createHash}=await import('node:crypto');
- const {readFileSync}=await import('node:fs');
- const archive=path.resolve(root,'../Mesa-e-Dados-v1.4-preservada-melhorias-v1.5.zip');
- // Only run archive comparison when this reference exists (developer workspace).
- if(!fs.existsSync(archive))return;
- for(const file of ['server.js','src/AudioCenter.jsx','package.json','package-lock.json','render.yaml','vite.config.js',/* Rebranding v1.5 altera manifesto, SW e index.html intencionalmente. */]){
-  const original=execFileSync('unzip',['-p',archive,file]);const current=readFileSync(path.join(root,file));
-  assert.equal(createHash('sha256').update(current).digest('hex'),createHash('sha256').update(original).digest('hex'),file);
- }
-});

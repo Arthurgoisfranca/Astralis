@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readImage, resizeImage } from "./SharedTools.jsx";
 import { SYSTEMS, systemLabel } from "./RpgSystems.js";
 
@@ -89,7 +89,8 @@ export function Lobby({ room, presence, isGM, inviteUrl, send, identity, current
   const [form, setForm] = useState(room.campaign); const [copied, setCopied] = useState(false);
   // Enquanto o Mestre tem alterações não salvas, as atualizações da mesa não sobrescrevem o formulário.
   const [dirty, setDirty] = useState(false), [savingCampaign, setSavingCampaign] = useState(false);
-  const formRef = useRef(form); formRef.current = form;
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
   const statusNames = { completed: "Concluída", active: "Em andamento", notStarted: "Não iniciada" };
   useEffect(() => { if (!dirty) setForm(room.campaign); }, [room.campaign, dirty]);
   const update = key => event => { setDirty(true); setForm(old => ({ ...old, [key]: event.target.value })); };
