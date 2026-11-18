@@ -89,10 +89,10 @@ Tarefas marcadas `[x]` foram implementadas e testadas nos commits indicados. As 
   - Adicionar `semantic-review/` ao `.gitignore` (P9)
   - _Requirements: 3.15_
 
-- [ ] 14. Checkpoint — validar tudo
+- [x] 14. Checkpoint — validar tudo
   - [x] Rodar `npm run typecheck`, `npm test` (60/60) e `npm run build`; todos passam
   - [x] Teste com o build real em modo local: `/api/health`, `index.html`, bundle, rota `/join/...` e JSON malformado respondendo 400 em JSON
-  - [ ] Conferência manual no Chrome (abaixo), feita pelo usuário
+  - [x] Conferência manual no Chrome (abaixo), feita e aprovada pelo usuário
   - Subir o servidor em modo local e conferir no Chrome: abrir PDF de Documentos do Mestre e da Biblioteca; enviar mapa, música e retrato; rolar em cada sistema; dois navegadores entrando ao mesmo tempo
   - Perguntar ao usuário se há dúvidas antes do merge na `main`
   - _Requirements: 3.1–3.15_
