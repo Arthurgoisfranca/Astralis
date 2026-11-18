@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { readImage, resizeImage } from "./SharedTools.jsx";
-import { SYSTEMS } from "./RpgSystems.js";
+import { SYSTEMS, systemLabel } from "./RpgSystems.js";
 
 export const MODULES = [
   ["agenda", "Agenda"], ["system", "Sistema"], ["characters", "Personagens"], ["lore", "Universo"], ["npcs", "NPCs"],
@@ -27,7 +27,7 @@ function CampaignForm({ onCreate, busy }) {
   }
   return <form onSubmit={event => { event.preventDefault(); onCreate(form); }} className="stack-form">
     <label>Nome da campanha<input required maxLength="100" value={form.title} onChange={update("title")} placeholder="[D&D 5e] Mesa para iniciantes"/></label>
-    <label>Sistema<select value={form.system} onChange={update("system")}><option value="">Selecione o sistema</option>{SYSTEMS.map(system => <option key={system}>{system}</option>)}</select></label>
+    <label>Sistema<select value={form.system} onChange={update("system")}><option value="">Selecione o sistema</option>{SYSTEMS.map(system => <option key={system} value={system}>{systemLabel(system)}</option>)}</select></label>
     <label>Seu nome como Mestre<input value={form.gmName} onChange={update("gmName")} placeholder="Nome que aparecerá na sala"/></label>
     <label>Status inicial<select value={form.status} onChange={update("status")}><option value="notStarted">Não iniciada</option><option value="active">Em andamento</option><option value="completed">Concluída</option></select></label>
     <details className="campaign-extra"><summary>Detalhes da mesa</summary><div className="campaign-extra-grid">
@@ -111,7 +111,7 @@ export function Lobby({ room, presence, isGM, inviteUrl, send, identity, current
       </section>
       <div className="lobby-right">
         {isGM && <section className="surface campaign-settings"><div className="section-eyebrow">DADOS DA CAMPANHA</div><form onSubmit={event => { event.preventDefault(); send("campaign:update", form); }} className="compact-form campaign-edit">
-          <label>Título<input value={form.title || ""} onChange={update("title")}/></label><label>Sistema<select value={form.system || ""} onChange={update("system")}><option value="">Selecione o sistema</option>{SYSTEMS.map(system => <option key={system}>{system}</option>)}</select></label><label>Nome do Mestre<input value={form.gmName || ""} onChange={update("gmName")}/></label><label>Status<select value={form.status || "notStarted"} onChange={update("status")}><option value="notStarted">Não iniciada</option><option value="active">Em andamento</option><option value="completed">Concluída</option></select></label>
+          <label>Título<input value={form.title || ""} onChange={update("title")}/></label><label>Sistema<select value={form.system || ""} onChange={update("system")}><option value="">Selecione o sistema</option>{SYSTEMS.map(system => <option key={system} value={system}>{systemLabel(system)}</option>)}</select></label><label>Nome do Mestre<input value={form.gmName || ""} onChange={update("gmName")}/></label><label>Status<select value={form.status || "notStarted"} onChange={update("status")}><option value="notStarted">Não iniciada</option><option value="active">Em andamento</option><option value="completed">Concluída</option></select></label>
           <details className="edit-more"><summary>Editar os outros dados</summary><div className="campaign-extra-grid">
             <label>Duração<select value={form.duration || ""} onChange={update("duration")}><option>One-shot</option><option>Campanha curta</option><option>Campanha longa</option></select></label><label>Estilo<input value={form.style || ""} onChange={update("style")}/></label>
             <label>Vagas totais<input type="number" min="1" max="20" value={form.totalSeats || 1} onChange={update("totalSeats")}/></label><label>Vagas disponíveis<input type="number" min="0" max={form.totalSeats || 20} value={form.availableSeats ?? 0} onChange={update("availableSeats")}/></label>

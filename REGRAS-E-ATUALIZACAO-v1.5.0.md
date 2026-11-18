@@ -37,3 +37,10 @@
 3. Execute `npm ci --include=dev`, `npm run typecheck`, `node --test tests/*.test.cjs tests/*.test.mjs` e `npm run build`.
 4. Teste cadastro, login, criação/salvamento/recarga de fichas, áudio entre duas contas e telas mobile antes de publicar.
 5. Publicação no Render: use os comandos já configurados, sem alterar as chaves Supabase nem o serviço.
+
+
+## Vampiro — Alpha 2.0 (Fall 2026)
+
+Nova opção independente: `Vampire: The Masquerade 6E (Alpha 2.0)`. O identificador legado `Vampire: The Masquerade 5E / 6E` permanece inalterado e representa exclusivamente V5; o seletor mostra V5. Não converter fichas automaticamente.
+
+Fontes fornecidas: Vampire_The_Masquerade_Playtest_Player_Packet_PDF.pdf (pp. 5–7, 26, 39–40, 50, 56, 93–98, 103–104), Vampire_The_Masquerade_Playtest_Storyteller_Packet_PDF.pdf (cap. 3, Masquerade Tracker), VTM_BEL_ALPHA2_Scenario.pdf (pp. 3–6). As regras são provisórias. Os PDFs não são redistribuídos no repositório público; adicionar Player Packet à Biblioteca e os outros dois a Documentos do Mestre usando o upload existente. O Escudo contém referências e orientação para o tracker, cuja anotação é manual; o rolador é local como V5. Sem automatização de custos de poderes, efeitos de Paths, oposição/tie-break ou dano/defesa: resolva com o Narrador. O dado 10 vale dois sucessos independentemente de pares. A criação de personagens e os clãs são limitados ao conteúdo publicado no Alpha 2.0. Não altera servidor, autenticação, áudio, dependências ou migrações. 
